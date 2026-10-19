@@ -5,9 +5,34 @@ build/
 dist/
 wheels/
 *.egg-info
+.eggs/
+
+# Python tooling caches and coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
 
 # Virtual environments
-.venv
+.venv/
+venv/
 
-# Ide config
+# Training outputs (checkpoints, exports, videos, and TensorBoard logs)
+/logs/
+/wandb/
+MUJOCO_LOG.TXT
+
+# Local environment variables and credentials
+.env
+.env.*
+!.env.example
+!.env.*.example
+/.aws/
+
+# IDE and operating system files
 .vscode/
+.idea/
+.DS_Store
+Thumbs.db
