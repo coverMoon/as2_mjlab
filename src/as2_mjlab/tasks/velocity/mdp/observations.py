@@ -3,7 +3,18 @@
 import torch
 
 from mjlab.envs import ManagerBasedRlEnv
+from mjlab.entity import Entity
+from mjlab.managers.scene_entity_config import SceneEntityCfg
 
+
+def foot_height(
+    env: ManagerBasedRlEnv,
+    asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """World-frame Z position of each foot site."""
+
+    asset: Entity = env.scene[asset_cfg.name]
+    return asset.data.site_pos_w[:, asset_cfg.site_ids, 2]
 
 def phase(
     env: ManagerBasedRlEnv,

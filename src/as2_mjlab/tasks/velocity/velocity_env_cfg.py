@@ -181,16 +181,16 @@ def make_velocity_env_cfg() -> ManagerBasedRlEnvCfg:
     "twist": UniformVelocityCommandCfg(
       entity_name="robot",
       resampling_time_range=(3.0, 8.0),
-      rel_standing_envs=0.1,
-      rel_heading_envs=0.3,
-      rel_forward_envs=0.2,
+      rel_standing_envs=0.05,
+      rel_heading_envs=1.0,
+      rel_forward_envs=0.0,
       heading_command=True,
       heading_control_stiffness=0.5,
       debug_vis=True,
       ranges=UniformVelocityCommandCfg.Ranges(
-        lin_vel_x=(-1.0, 1.0),
+        lin_vel_x=(-1.0, 2.0),
         lin_vel_y=(-1.0, 1.0),
-        ang_vel_z=(-0.5, 0.5),
+        ang_vel_z=(-1.0, 1.0),
         heading=(-math.pi, math.pi),
       ),
     )
@@ -403,9 +403,17 @@ def make_velocity_env_cfg() -> ManagerBasedRlEnvCfg:
       params={
         "command_name": "twist",
         "velocity_stages": [
-          {"step": 0, "lin_vel_x": (-1.0, 1.0), "ang_vel_z": (-0.5, 0.5)},
-          {"step": 5000 * 24, "lin_vel_x": (-1.5, 2.0), "ang_vel_z": (-0.7, 0.7)},
-          {"step": 10000 * 24, "lin_vel_x": (-2.0, 3.0)},
+          {
+              "step": 0,
+              "lin_vel_x": (-0.5, 1.0),
+              "lin_vel_y": (-0.5, 0.5),
+              "ang_vel_z": (-1.0, 1.0),
+          },
+          {
+              "step": 5000 * 24,
+              "lin_vel_x": (-1.0, 2.0),
+              "lin_vel_y": (-1.0, 1.0),
+          },
         ],
       },
     ),
