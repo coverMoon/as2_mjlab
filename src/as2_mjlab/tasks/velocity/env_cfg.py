@@ -1,6 +1,10 @@
-"""AS2 flat velocity tracking environment."""
+"""Shared AS2 velocity configuration with Flat and Rough terrain variants."""
 
+from copy import deepcopy
+
+from mjlab.envs import ManagerBasedRlEnvCfg
 from mjlab.envs import mdp as envs_mdp
+from mjlab.managers.event_manager import EventTermCfg
 from mjlab.managers.reward_manager import RewardTermCfg
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.managers.observation_manager import ObservationTermCfg
@@ -10,7 +14,9 @@ from mjlab.tasks.velocity import mdp as velocity_mdp
 from mjlab.tasks.velocity.mdp import UniformVelocityCommandCfg
 from mjlab.sensor import (
     ContactMatch,
-    ContactSensorCfg
+    ContactSensorCfg,
+    ObjRef,
+    RayCastSensorCfg,
 )
 
 from .mdp import observations as as2_mdp
@@ -25,30 +31,24 @@ LEGS = ("FL", "FR", "RL", "RR")
 FOOT_GEOMS = tuple(f"{leg}_foot_collision" for leg in LEGS)
 
 
-def as2_flat_env_cfg(play: bool = False):
+def _as2_velocity_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
+    """Configure the AS2 robot, MDP, and common train/play behavior."""
     cfg = make_velocity_env_cfg()
 
     # Robot
     cfg.scene.entities = {"robot": get_as2_robot_cfg()}
     cfg.viewer.body_name = "base_link"
 
-    # Flat terrain
-    assert cfg.scene.terrain is not None
-    cfg.scene.terrain.terrain_type = "plane"
-    cfg.scene.terrain.terrain_generator = None
-
-    cfg.sim.njmax = 300
-    cfg.sim.mujoco.ccd_iterations = 50
-    cfg.sim.contact_sensor_maxmatch = 64
-    cfg.sim.nconmax = None
-
-    # Flat baseline uses foot site positions directly.
-    # Terrain raycast and foot height sensors are not required.
+    # Keep the base terrain raycast for Rough; use site heights for feet.
     sensors = [
         sensor
         for sensor in (cfg.scene.sensors or ())
-        if sensor.name not in ("terrain_scan", "foot_height_scan")
+        if sensor.name != "foot_height_scan"
     ]
+    for sensor in sensors:
+        if sensor.name == "terrain_scan":
+            assert isinstance(sensor, RayCastSensorCfg)
+            sensor.frame = ObjRef(type="body", name="base_link", entity="robot")
 
     # Foot contact sensor
     feet_contact = ContactSensorCfg(
@@ -89,10 +89,6 @@ def as2_flat_env_cfg(play: bool = False):
         feet_contact,
         nonfoot_contact,
     )
-
-    # Remove terrain height observations on flat ground.
-    for group in ("actor", "critic"):
-        cfg.observations[group].terms.pop("height_scan", None)
 
     # Official AS2 privileged foot height observation.
     foot_height_term = cfg.observations["critic"].terms["foot_height"]
@@ -139,11 +135,13 @@ def as2_flat_env_cfg(play: bool = False):
         "joint_pos",
         "joint_vel",
         "actions",
+        "height_scan",
     )
 
     critic_order = (
-        *actor_order,
+        *actor_order[:-1],
         "base_lin_vel",
+        "height_scan",
         "foot_height",
         "foot_air_time",
         "foot_contact",
@@ -323,9 +321,8 @@ def as2_flat_env_cfg(play: bool = False):
     # TerrainHeightSensor and is absent from Unitree baseline.
     cfg.rewards.pop("foot_swing_height", None)
 
-    # Flat terrain does not require terrain boundary checks.
+    # Match Unitree AS2: orientation and illegal contact handle termination.
     cfg.terminations.pop("out_of_terrain_bounds", None)
-    cfg.curriculum.pop("terrain_levels", None)
 
     cfg.terminations["illegal_contact"] = TerminationTermCfg(
         func=velocity_mdp.illegal_contact,
@@ -346,12 +343,86 @@ def as2_flat_env_cfg(play: bool = False):
         # Disable curriculum learning.
         cfg.curriculum = {}
 
-        # Official AS2 flat play command ranges.
+    return cfg
+
+
+def as2_flat_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
+    """Preserve the existing Flat observation/checkpoint and training contract."""
+    cfg = _as2_velocity_env_cfg(play=play)
+    assert cfg.scene.terrain is not None
+    cfg.scene.terrain.terrain_type = "plane"
+    cfg.scene.terrain.terrain_generator = None
+
+    cfg.sim.njmax = 300
+    cfg.sim.nconmax = None
+    cfg.sim.mujoco.ccd_iterations = 50
+    cfg.sim.contact_sensor_maxmatch = 64
+
+    cfg.scene.sensors = tuple(
+        sensor for sensor in cfg.scene.sensors or ()
+        if sensor.name != "terrain_scan"
+    )
+    for group in ("actor", "critic"):
+        cfg.observations[group].terms.pop("height_scan", None)
+    cfg.curriculum.pop("terrain_levels", None)
+
+    # Keep the user's existing Flat velocity curriculum; Rough uses the
+    # official stages from the local make_velocity_env_cfg() template.
+    if not play:
+        cfg.curriculum["command_vel"].params["velocity_stages"] = [
+            {
+                "step": 0,
+                "lin_vel_x": (-0.5, 1.0),
+                "lin_vel_y": (-0.3, 0.3),
+                "ang_vel_z": (-0.5, 0.5),
+            },
+            {
+                "step": 500 * 24,
+                "lin_vel_x": (-2.0, 3.0),
+                "lin_vel_y": (-1.0, 1.0),
+                "ang_vel_z": (-3.14, 3.14),
+            },
+        ]
+
+    if play:
         twist_cmd = cfg.commands["twist"]
         assert isinstance(twist_cmd, UniformVelocityCommandCfg)
-
         twist_cmd.ranges.lin_vel_x = (-0.5, 1.0)
         twist_cmd.ranges.lin_vel_y = (-0.5, 0.5)
         twist_cmd.ranges.ang_vel_z = (-0.5, 0.5)
+
+    return cfg
+
+
+def as2_rough_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
+    """AS2 Rough with MjLab 1.6 terrain curriculum and 187 height rays."""
+    cfg = _as2_velocity_env_cfg(play=play)
+    cfg.sim.mujoco.ccd_iterations = 500
+    cfg.sim.contact_sensor_maxmatch = 500
+    cfg.viewer.distance = 1.5
+    cfg.viewer.elevation = -10.0
+
+    assert cfg.scene.terrain is not None
+    assert cfg.scene.terrain.terrain_generator is not None
+    # The base factory uses a shallow dataclass replacement. Isolate nested
+    # terrain configs from the global preset and other task/play instances.
+    generator = deepcopy(cfg.scene.terrain.terrain_generator)
+    cfg.scene.terrain.terrain_generator = generator
+    generator.curriculum = not play
+
+    if play:
+        # In 1.6 randomize_terrain only changes origins. Run it before the
+        # root reset so the robot is placed on the newly selected patch.
+        cfg.events = {
+            "randomize_terrain": EventTermCfg(
+                func=envs_mdp.randomize_terrain,
+                mode="reset",
+                params={},
+            ),
+            **cfg.events,
+        }
+        generator.num_rows = 5
+        generator.num_cols = 5
+        generator.border_width = 10.0
 
     return cfg
