@@ -7,6 +7,7 @@ from mjlab.managers.observation_manager import ObservationTermCfg
 from mjlab.envs.mdp.actions import JointPositionActionCfg
 from mjlab.managers.termination_manager import TerminationTermCfg
 from mjlab.tasks.velocity import mdp as velocity_mdp
+from mjlab.tasks.velocity.mdp import UniformVelocityCommandCfg
 from mjlab.sensor import (
     ContactMatch,
     ContactSensorCfg
@@ -335,8 +336,22 @@ def as2_flat_env_cfg(play: bool = False):
     )
 
     if play:
+        # Effectively disable episode timeout.
+        cfg.episode_length_s = int(1e9)
+
+        # Disable observation corruption and push events.
         cfg.observations["actor"].enable_corruption = False
         cfg.events.pop("push_robot", None)
+
+        # Disable curriculum learning.
         cfg.curriculum = {}
+
+        # Official AS2 flat play command ranges.
+        twist_cmd = cfg.commands["twist"]
+        assert isinstance(twist_cmd, UniformVelocityCommandCfg)
+
+        twist_cmd.ranges.lin_vel_x = (-0.5, 1.0)
+        twist_cmd.ranges.lin_vel_y = (-0.5, 0.5)
+        twist_cmd.ranges.ang_vel_z = (-0.5, 0.5)
 
     return cfg
