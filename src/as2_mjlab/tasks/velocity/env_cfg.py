@@ -236,6 +236,64 @@ def as2_flat_env_cfg(play: bool = False):
         },
     )
 
+    # --------------------------------------------------
+    # Unitree AS2 baseline: remaining reward alignment
+    # --------------------------------------------------
+
+    # Pose
+    cfg.rewards["pose"].params["walking_threshold"] = 0.1
+    cfg.rewards["pose"].params["running_threshold"] = 1.5
+
+    # Body angular velocity and momentum
+    cfg.rewards["body_ang_vel"].weight = -0.05
+    cfg.rewards["angular_momentum"].weight = -0.025
+
+    # Termination penalty
+    cfg.rewards["is_terminated"] = RewardTermCfg(
+        func=envs_mdp.is_terminated,
+        weight=-200.0,
+    )
+
+    # Joint acceleration
+    cfg.rewards["joint_acc_l2"] = RewardTermCfg(
+        func=envs_mdp.joint_acc_l2,
+        weight=-2.5e-7,
+    )
+
+    # Joint position limits
+    cfg.rewards["joint_pos_limits"] = cfg.rewards.pop(
+        "dof_pos_limits"
+    )
+    cfg.rewards["joint_pos_limits"].weight = -10.0
+
+    # Action smoothness
+    cfg.rewards["action_rate_l2"].weight = -0.05
+
+    # Foot slip
+    cfg.rewards["foot_slip"].weight = -0.25
+    cfg.rewards["foot_slip"].params["command_threshold"] = 0.1
+
+    # Soft landing
+    cfg.rewards["soft_landing"].weight = -1e-3
+    cfg.rewards["soft_landing"].params["command_threshold"] = 0.1
+
+    # Stand still
+    cfg.rewards["stand_still"] = RewardTermCfg(
+        func=as2_rewards.stand_still,
+        weight=-1.0,
+        params={
+            "command_name": "twist",
+            "command_threshold": 0.1,
+            "asset_cfg": SceneEntityCfg(
+                "robot",
+                joint_names=(".*",),
+            ),
+        },
+    )
+
+    # Not part of the official AS2 reward set.
+    cfg.rewards.pop("air_time", None)
+
     # MjLab's swing height term depends on the removed
     # TerrainHeightSensor and is absent from Unitree baseline.
     cfg.rewards.pop("foot_swing_height", None)

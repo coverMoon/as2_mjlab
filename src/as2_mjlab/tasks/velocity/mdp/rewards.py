@@ -122,3 +122,26 @@ def feet_gait(
     active = (total_command > command_threshold).float()
 
     return reward * active
+
+def stand_still(
+    env: ManagerBasedRlEnv,
+    command_name: str,
+    command_threshold: float,
+    asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Penalize deviation from default pose when commanded to stand still."""
+    asset: Entity = env.scene[asset_cfg.name]
+
+    joint_pos = asset.data.joint_pos[:, asset_cfg.joint_ids]
+    default_pos = asset.data.default_joint_pos[:, asset_cfg.joint_ids]
+
+    error = torch.sum(torch.square(joint_pos - default_pos), dim=1)
+
+    command = env.command_manager.get_command(command_name)
+    linear_norm = torch.norm(command[:, :2], dim=1)
+    angular_norm = torch.abs(command[:, 2])
+    total_command = linear_norm + angular_norm
+
+    standing = (total_command <= command_threshold).float()
+
+    return error * standing
