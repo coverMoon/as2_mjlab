@@ -5,6 +5,8 @@ from mjlab.managers.reward_manager import RewardTermCfg
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.managers.observation_manager import ObservationTermCfg
 from mjlab.envs.mdp.actions import JointPositionActionCfg
+from mjlab.managers.termination_manager import TerminationTermCfg
+from mjlab.tasks.velocity import mdp as velocity_mdp
 from mjlab.sensor import (
     ContactMatch,
     ContactSensorCfg
@@ -18,7 +20,7 @@ from .velocity_env_cfg import make_velocity_env_cfg
 from as2_mjlab.robots.as2_constants import get_as2_robot_cfg
 
 
-LEGS = ("FR", "FL", "RR", "RL")
+LEGS = ("FL", "FR", "RL", "RR")
 FOOT_GEOMS = tuple(f"{leg}_foot_collision" for leg in LEGS)
 
 
@@ -64,7 +66,28 @@ def as2_flat_env_cfg(play: bool = False):
         num_slots=1,
         track_air_time=True,
     )
-    cfg.scene.sensors = tuple(sensors) + (feet_contact,)
+    nonfoot_contact = ContactSensorCfg(
+        name="nonfoot_ground_touch",
+        primary=ContactMatch(
+            mode="geom",
+            entity="robot",
+            pattern=r".*_collision\d*$",
+            exclude=FOOT_GEOMS,
+        ),
+        secondary=ContactMatch(
+            mode="body",
+            pattern="terrain",
+        ),
+        fields=("found", "force"),
+        reduce="none",
+        num_slots=1,
+        history_length=4,
+    )
+
+    cfg.scene.sensors = tuple(sensors) + (
+        feet_contact,
+        nonfoot_contact,
+    )
 
     # Remove terrain height observations on flat ground.
     for group in ("actor", "critic"):
@@ -84,6 +107,7 @@ def as2_flat_env_cfg(play: bool = False):
     # Align observation layout with Unitree AS2 Flat.
     actor_terms = cfg.observations["actor"].terms
     critic_terms = cfg.observations["critic"].terms
+    actor_terms["joint_pos"].params["biased"] = False
 
     # Linear velocity is only available to the critic.
     actor_terms.pop("base_lin_vel", None)
@@ -301,6 +325,14 @@ def as2_flat_env_cfg(play: bool = False):
     # Flat terrain does not require terrain boundary checks.
     cfg.terminations.pop("out_of_terrain_bounds", None)
     cfg.curriculum.pop("terrain_levels", None)
+
+    cfg.terminations["illegal_contact"] = TerminationTermCfg(
+        func=velocity_mdp.illegal_contact,
+        params={
+            "sensor_name": "nonfoot_ground_touch",
+            "force_threshold": 10.0,
+        },
+    )
 
     if play:
         cfg.observations["actor"].enable_corruption = False
