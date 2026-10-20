@@ -9,6 +9,7 @@ from mjlab.tasks.registry import list_tasks
 from mjlab.terrains.config import ROUGH_TERRAINS_CFG
 
 from as2_mjlab.tasks.velocity.env_cfg import as2_flat_env_cfg, as2_rough_env_cfg
+from as2_mjlab.tasks.velocity.rl_cfg import as2_ppo_runner_cfg
 
 
 ACTOR_ORDER = (
@@ -16,7 +17,7 @@ ACTOR_ORDER = (
     "joint_pos", "joint_vel", "actions",
 )
 CRITIC_ORDER = ACTOR_ORDER + (
-    "base_lin_vel", "foot_height", "foot_air_time", "foot_contact",
+    "base_lin_vel", "height_scan", "foot_height", "foot_air_time", "foot_contact",
     "foot_contact_forces",
 )
 REWARD_WEIGHTS = {
@@ -41,7 +42,7 @@ class VelocityConfigTest(unittest.TestCase):
         self.assertEqual(cfg.scene.terrain.terrain_type, "plane")
         self.assertIsNone(cfg.scene.terrain.terrain_generator)
         self.assertEqual({s.name for s in cfg.scene.sensors},
-                         {"feet_ground_contact", "nonfoot_ground_touch"})
+                         {"terrain_scan", "feet_ground_contact", "nonfoot_ground_touch"})
         self.assertEqual((cfg.sim.njmax, cfg.sim.nconmax), (300, None))
         self.assertEqual(cfg.sim.mujoco.ccd_iterations, 50)
         self.assertEqual(cfg.sim.contact_sensor_maxmatch, 64)
@@ -61,21 +62,47 @@ class VelocityConfigTest(unittest.TestCase):
         self.assertEqual(rough.scene.terrain.terrain_type, "generator")
         self.assertTrue(rough.scene.terrain.terrain_generator.curriculum)
         self.assertEqual(set(rough.curriculum), {"command_vel", "terrain_levels"})
-        self.assertEqual(rough.curriculum["command_vel"].params["velocity_stages"][1]["step"], 5000 * 24)
-        self.assertEqual(tuple(rough.observations["actor"].terms), ACTOR_ORDER + ("height_scan",))
-        self.assertEqual(tuple(rough.observations["critic"].terms),
-                         ACTOR_ORDER + ("base_lin_vel", "height_scan") + CRITIC_ORDER[8:])
+        self.assertEqual(flat.curriculum["command_vel"], rough.curriculum["command_vel"])
+        self.assertEqual(tuple(rough.observations["actor"].terms), ACTOR_ORDER)
+        self.assertEqual(tuple(rough.observations["critic"].terms), CRITIC_ORDER)
         scan = next(s for s in rough.scene.sensors if s.name == "terrain_scan")
         self.assertEqual(scan.frame.name, "base_link")
         offsets, _ = scan.pattern.generate_rays(None, "cpu")
         self.assertEqual(offsets.shape, (187, 3))
         self.assertNotIn("foot_height_scan", {s.name for s in rough.scene.sensors})
 
+    def test_flat_rough_observation_alignment(self):
+        for play in (False, True):
+            with self.subTest(play=play):
+                flat = as2_flat_env_cfg(play=play)
+                rough = as2_rough_env_cfg(play=play)
+                self.assertEqual(flat.observations, rough.observations)
+                self.assertNotIn("height_scan", flat.observations["actor"].terms)
+                self.assertIn("height_scan", flat.observations["critic"].terms)
+                flat_scan = next(s for s in flat.scene.sensors if s.name == "terrain_scan")
+                rough_scan = next(s for s in rough.scene.sensors if s.name == "terrain_scan")
+                self.assertEqual(flat_scan, rough_scan)
+
+    def test_shared_command_curriculum(self):
+        flat, rough = as2_flat_env_cfg(), as2_rough_env_cfg()
+        flat_stages = flat.curriculum["command_vel"].params["velocity_stages"]
+        rough_stages = rough.curriculum["command_vel"].params["velocity_stages"]
+        steps = as2_ppo_runner_cfg().num_steps_per_env
+        self.assertEqual([s["step"] for s in rough_stages],
+                         [i * steps for i in (0, 500, 1000, 1500)])
+        self.assertEqual(flat_stages, rough_stages)
+        rough_stages[0]["lin_vel_x"] = (-0.1, 0.1)
+        self.assertEqual(flat_stages[0]["lin_vel_x"], (-0.5, 1.0))
+        for factory in (as2_flat_env_cfg, as2_rough_env_cfg):
+            self.assertEqual(factory(play=True).curriculum, {})
+
     def test_play_and_config_isolation(self):
         train = as2_rough_env_cfg()
         play = as2_rough_env_cfg(play=True)
         generator = play.scene.terrain.terrain_generator
-        self.assertEqual((generator.num_rows, generator.num_cols, generator.border_width), (5, 5, 10.0))
+        self.assertEqual((generator.num_rows, generator.num_cols, generator.border_width),
+                         (ROUGH_TERRAINS_CFG.num_rows, ROUGH_TERRAINS_CFG.num_cols,
+                          ROUGH_TERRAINS_CFG.border_width))
         self.assertFalse(generator.curriculum)
         self.assertTrue(train.scene.terrain.terrain_generator.curriculum)
         self.assertEqual(play.curriculum, {})

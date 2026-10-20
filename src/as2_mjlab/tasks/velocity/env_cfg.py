@@ -22,6 +22,8 @@ from mjlab.sensor import (
 from .mdp import observations as as2_mdp
 from .mdp import rewards as as2_rewards
 
+from .rl_cfg import as2_ppo_runner_cfg
+
 from .velocity_env_cfg import make_velocity_env_cfg
 
 from as2_mjlab.robots.as2_constants import get_as2_robot_cfg
@@ -39,7 +41,8 @@ def _as2_velocity_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
     cfg.scene.entities = {"robot": get_as2_robot_cfg()}
     cfg.viewer.body_name = "base_link"
 
-    # Keep the base terrain raycast for Rough; use site heights for feet.
+    # Both critics receive terrain scans; both actors use proprioception only.
+    # Use site heights for the separate per-foot privileged observation.
     sensors = [
         sensor
         for sensor in (cfg.scene.sensors or ())
@@ -101,7 +104,7 @@ def _as2_velocity_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
         ),
     }
 
-    # Align observation layout with Unitree AS2 Flat.
+    # Share the same asymmetric actor/critic layout on Flat and Rough.
     actor_terms = cfg.observations["actor"].terms
     critic_terms = cfg.observations["critic"].terms
     actor_terms["joint_pos"].params["biased"] = False
@@ -135,11 +138,10 @@ def _as2_velocity_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
         "joint_pos",
         "joint_vel",
         "actions",
-        "height_scan",
     )
 
     critic_order = (
-        *actor_order[:-1],
+        *actor_order,
         "base_lin_vel",
         "height_scan",
         "foot_height",
@@ -332,6 +334,36 @@ def _as2_velocity_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
         },
     )
 
+    # Shared command curriculum for Flat and Rough training.
+    if not play:
+        cfg.curriculum["command_vel"].params["velocity_stages"] = [
+            {
+                "step": 0,
+                "lin_vel_x": (-0.5, 1.0),
+                "lin_vel_y": (-0.3, 0.3),
+                "ang_vel_z": (-0.5, 0.5),
+            },
+            {
+                "step": 500 * as2_ppo_runner_cfg().num_steps_per_env,
+                "lin_vel_x": (-0.7, 1.3),
+                "lin_vel_y": (-0.5, 0.5),
+                "ang_vel_z": (-1.3, 1.3),
+            },
+            {
+                "step": 1000 * as2_ppo_runner_cfg().num_steps_per_env,
+                "lin_vel_x": (-1.0, 1.6),
+                "lin_vel_y": (-0.8, 0.8),
+                "ang_vel_z": (-2.5, 2.5),
+            },
+            {
+                "step": 1500 * as2_ppo_runner_cfg().num_steps_per_env,
+                "lin_vel_x": (-1.5, 2.0),
+                "lin_vel_y": (-1.0, 1.0),
+                "ang_vel_z": (-3.14, 3.14),
+            }
+        ]
+
+
     if play:
         # Effectively disable episode timeout.
         cfg.episode_length_s = int(1e9)
@@ -347,7 +379,7 @@ def _as2_velocity_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
 
 
 def as2_flat_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
-    """Preserve the existing Flat observation/checkpoint and training contract."""
+    """Flat terrain with a 47-D actor and a 261-D privileged critic."""
     cfg = _as2_velocity_env_cfg(play=play)
     assert cfg.scene.terrain is not None
     cfg.scene.terrain.terrain_type = "plane"
@@ -358,31 +390,8 @@ def as2_flat_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
     cfg.sim.mujoco.ccd_iterations = 50
     cfg.sim.contact_sensor_maxmatch = 64
 
-    cfg.scene.sensors = tuple(
-        sensor for sensor in cfg.scene.sensors or ()
-        if sensor.name != "terrain_scan"
-    )
-    for group in ("actor", "critic"):
-        cfg.observations[group].terms.pop("height_scan", None)
     cfg.curriculum.pop("terrain_levels", None)
 
-    # Keep the user's existing Flat velocity curriculum; Rough uses the
-    # official stages from the local make_velocity_env_cfg() template.
-    if not play:
-        cfg.curriculum["command_vel"].params["velocity_stages"] = [
-            {
-                "step": 0,
-                "lin_vel_x": (-0.5, 1.0),
-                "lin_vel_y": (-0.3, 0.3),
-                "ang_vel_z": (-0.5, 0.5),
-            },
-            {
-                "step": 500 * 24,
-                "lin_vel_x": (-2.0, 3.0),
-                "lin_vel_y": (-1.0, 1.0),
-                "ang_vel_z": (-3.14, 3.14),
-            },
-        ]
 
     if play:
         twist_cmd = cfg.commands["twist"]
@@ -395,7 +404,7 @@ def as2_flat_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
 
 
 def as2_rough_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
-    """AS2 Rough with MjLab 1.6 terrain curriculum and 187 height rays."""
+    """Rough terrain with the same 47/261-D inputs and 187 critic height rays."""
     cfg = _as2_velocity_env_cfg(play=play)
     cfg.sim.mujoco.ccd_iterations = 500
     cfg.sim.contact_sensor_maxmatch = 500
@@ -421,8 +430,8 @@ def as2_rough_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
             ),
             **cfg.events,
         }
-        generator.num_rows = 5
-        generator.num_cols = 5
-        generator.border_width = 10.0
+        # generator.num_rows = 5
+        # generator.num_cols = 5
+        # generator.border_width = 10.0
 
     return cfg
