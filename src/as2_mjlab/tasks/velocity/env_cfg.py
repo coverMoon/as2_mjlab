@@ -1,6 +1,7 @@
 """Shared AS2 velocity configuration with Flat and Rough terrain variants."""
 
 from copy import deepcopy
+from dataclasses import fields
 
 from mjlab.envs import ManagerBasedRlEnvCfg
 from mjlab.envs import mdp as envs_mdp
@@ -17,12 +18,16 @@ from mjlab.sensor import (
     ContactSensorCfg,
     ObjRef,
     RayCastSensorCfg,
+    RingPatternCfg,
+    TerrainHeightSensorCfg,
 )
 
 from .mdp import observations as as2_mdp
 from .mdp import rewards as as2_rewards
+from .mdp.events import log_play_terminations
 
 from .rl_cfg import as2_ppo_runner_cfg
+from .sensors import TerrainProjectionSensorCfg
 
 from .velocity_env_cfg import make_velocity_env_cfg
 
@@ -31,6 +36,9 @@ from as2_mjlab.robots.as2_constants import get_as2_robot_cfg
 
 LEGS = ("FL", "FR", "RL", "RR")
 FOOT_GEOMS = tuple(f"{leg}_foot_collision" for leg in LEGS)
+
+# Play-only diagnostics. Set False to silence pre-reset termination logs.
+LOG_PLAY_TERMINATIONS = True
 
 
 def _as2_velocity_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
@@ -41,17 +49,33 @@ def _as2_velocity_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
     cfg.scene.entities = {"robot": get_as2_robot_cfg()}
     cfg.viewer.body_name = "base_link"
 
-    # Both critics receive terrain scans; both actors use proprioception only.
-    # Use site heights for the separate per-foot privileged observation.
-    sensors = [
-        sensor
-        for sensor in (cfg.scene.sensors or ())
-        if sensor.name != "foot_height_scan"
-    ]
-    for sensor in sensors:
+    # Both critics receive terrain scans; actors use proprioception only.
+    # Foot clearance uses local terrain; critic foot_height keeps world Z.
+    sensors = list(cfg.scene.sensors or ())
+    for index, sensor in enumerate(sensors):
         if sensor.name == "terrain_scan":
             assert isinstance(sensor, RayCastSensorCfg)
             sensor.frame = ObjRef(type="body", name="base_link", entity="robot")
+        elif sensor.name == "foot_height_scan":
+            assert isinstance(sensor, TerrainHeightSensorCfg)
+            sensor = TerrainProjectionSensorCfg(**{
+                field.name: getattr(sensor, field.name)
+                for field in fields(TerrainHeightSensorCfg)
+            })
+            sensors[index] = sensor
+            sensor.frame = tuple(
+                ObjRef(type="site", name=leg, entity="robot") for leg in LEGS
+            )
+            sensor.pattern = RingPatternCfg.single_ring(
+                radius=0.04, num_samples=4, include_center=True,
+            )
+            # Internal queries use the static terrain's upper bound. Visualization
+            # shows only physical foot-to-ground clearance, never the query rays.
+            sensor.query_margin = 0.1
+            sensor.ray_alignment = "yaw"
+            sensor.reduction = "min"
+            sensor.debug_vis = False
+            sensor.viz.hit_sphere_radius = 0.15
 
     # Foot contact sensor
     feet_contact = ContactSensorCfg(
@@ -185,6 +209,7 @@ def _as2_velocity_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
         ".*calf_joint": 0.5,
     }
     pose["std_running"] = dict(pose["std_walking"])
+    cfg.rewards["pose"].weight = 0.5
 
     cfg.rewards["upright"].params[
         "asset_cfg"
@@ -206,7 +231,7 @@ def _as2_velocity_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
     cfg.rewards["track_linear_velocity"].func = (
         as2_rewards.track_linear_velocity
     )
-    cfg.rewards["track_linear_velocity"].weight = 1.0
+    cfg.rewards["track_linear_velocity"].weight = 2.0
 
     cfg.rewards["track_angular_velocity"].func = (
         as2_rewards.track_angular_velocity
@@ -221,21 +246,22 @@ def _as2_velocity_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
 
     cfg.rewards["body_orientation_l2"] = RewardTermCfg(
         func=envs_mdp.flat_orientation_l2,
-        weight=-1.0,
+        weight=-0.2,
         params={
             "asset_cfg": SceneEntityCfg("robot"),
         },
     )
 
     # --------------------------------------------------
-    # Official AS2 foot clearance
+    # Foot clearance relative to the local terrain surface
     # --------------------------------------------------
 
     cfg.rewards["foot_clearance"].func = as2_rewards.feet_clearance
-    cfg.rewards["foot_clearance"].weight = -1.0
+    cfg.rewards["foot_clearance"].weight = -2.0
 
     cfg.rewards["foot_clearance"].params = {
         "target_height": 0.10,
+        "height_sensor_name": "foot_height_scan",
         "command_name": "twist",
         "command_threshold": 0.1,
         "asset_cfg": SceneEntityCfg(
@@ -250,7 +276,7 @@ def _as2_velocity_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
 
     cfg.rewards["foot_gait"] = RewardTermCfg(
         func=as2_rewards.feet_gait,
-        weight=0.5,
+        weight=0.1,
         params={
             "period": 0.6,
             "offset": [0.0, 0.5, 0.5, 0.0],
@@ -266,6 +292,7 @@ def _as2_velocity_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
     # --------------------------------------------------
 
     # Pose
+    cfg.rewards["pose"].weight = 1.0
     cfg.rewards["pose"].params["walking_threshold"] = 0.1
     cfg.rewards["pose"].params["running_threshold"] = 1.5
 
@@ -319,8 +346,7 @@ def _as2_velocity_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
     # Not part of the official AS2 reward set.
     cfg.rewards.pop("air_time", None)
 
-    # MjLab's swing height term depends on the removed
-    # TerrainHeightSensor and is absent from Unitree baseline.
+    # Keep swing-height shaping disabled; only clearance uses terrain height.
     cfg.rewards.pop("foot_swing_height", None)
 
     # Match Unitree AS2: orientation and illegal contact handle termination.
@@ -357,7 +383,7 @@ def _as2_velocity_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
             },
             {
                 "step": 1500 * as2_ppo_runner_cfg().num_steps_per_env,
-                "lin_vel_x": (-1.5, 2.0),
+                "lin_vel_x": (-2.0, 2.0),
                 "lin_vel_y": (-1.0, 1.0),
                 "ang_vel_z": (-3.14, 3.14),
             }
@@ -374,6 +400,18 @@ def _as2_velocity_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
 
         # Disable curriculum learning.
         cfg.curriculum = {}
+
+        if LOG_PLAY_TERMINATIONS:
+            cfg.events["log_play_terminations"] = EventTermCfg(
+                func=log_play_terminations,
+                mode="step",
+                params={"max_envs": 4},
+            )
+
+        for sensor in cfg.scene.sensors or ():
+            if sensor.name == "foot_height_scan":
+                sensor.debug_vis = True
+                sensor.viz.show_rays = True
 
     return cfg
 
@@ -406,7 +444,19 @@ def as2_flat_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
 def as2_rough_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
     """Rough terrain with the same 47/261-D inputs and 187 critic height rays."""
     cfg = _as2_velocity_env_cfg(play=play)
-    cfg.sim.mujoco.ccd_iterations = 500
+
+    # Allow shank impacts on stair edges without ending the episode.
+    # This only changes contact monitoring; calf collision physics stays on.
+    for sensor in cfg.scene.sensors or ():
+        if sensor.name == "nonfoot_ground_touch":
+            assert isinstance(sensor, ContactSensorCfg)
+            sensor.primary.exclude = (
+                *(sensor.primary.exclude or ()),
+                r".*_calf\d*_collision\d*$",
+            )
+
+    cfg.sim.njmax = 300
+    cfg.sim.mujoco.ccd_iterations = 50
     cfg.sim.contact_sensor_maxmatch = 500
     cfg.viewer.distance = 1.5
     cfg.viewer.elevation = -10.0
@@ -417,7 +467,25 @@ def as2_rough_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
     # terrain configs from the global preset and other task/play instances.
     generator = deepcopy(cfg.scene.terrain.terrain_generator)
     cfg.scene.terrain.terrain_generator = generator
-    generator.curriculum = not play
+    #generator.curriculum = not play
+    generator.curriculum = True
+
+    # Linearly scale each stair riser from 0 cm at level 0 to 30 cm at level 9.
+    for name in ("pyramid_stairs", "pyramid_stairs_inv"):
+        generator.sub_terrains[name].step_height_range = (0.0, 0.3)
+
+    proportions = {
+        "flat": 0.1,
+        "pyramid_stairs": 0.3,
+        "pyramid_stairs_inv": 0.2,
+        "hf_pyramid_slope": 0.1,
+        "hf_pyramid_slope_inv": 0.1,
+        "random_rough": 0.1,
+        "wave_terrain": 0.1,
+    }
+
+    for name, proportion in proportions.items():
+        generator.sub_terrains[name].proportion = proportion
 
     if play:
         # In 1.6 randomize_terrain only changes origins. Run it before the

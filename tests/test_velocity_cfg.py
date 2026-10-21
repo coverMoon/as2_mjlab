@@ -42,7 +42,7 @@ class VelocityConfigTest(unittest.TestCase):
         self.assertEqual(cfg.scene.terrain.terrain_type, "plane")
         self.assertIsNone(cfg.scene.terrain.terrain_generator)
         self.assertEqual({s.name for s in cfg.scene.sensors},
-                         {"terrain_scan", "feet_ground_contact", "nonfoot_ground_touch"})
+                         {"terrain_scan", "foot_height_scan", "feet_ground_contact", "nonfoot_ground_touch"})
         self.assertEqual((cfg.sim.njmax, cfg.sim.nconmax), (300, None))
         self.assertEqual(cfg.sim.mujoco.ccd_iterations, 50)
         self.assertEqual(cfg.sim.contact_sensor_maxmatch, 64)
@@ -69,7 +69,7 @@ class VelocityConfigTest(unittest.TestCase):
         self.assertEqual(scan.frame.name, "base_link")
         offsets, _ = scan.pattern.generate_rays(None, "cpu")
         self.assertEqual(offsets.shape, (187, 3))
-        self.assertNotIn("foot_height_scan", {s.name for s in rough.scene.sensors})
+        self.assertIn("foot_height_scan", {s.name for s in rough.scene.sensors})
 
     def test_flat_rough_observation_alignment(self):
         for play in (False, True):

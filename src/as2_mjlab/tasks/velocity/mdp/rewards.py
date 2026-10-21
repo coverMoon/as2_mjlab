@@ -11,6 +11,8 @@ from mjlab.entity import Entity
 from mjlab.envs import ManagerBasedRlEnv
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.sensor import ContactSensor
+# Reuse terrain-relative clearance while preserving the existing import path.
+from mjlab.tasks.velocity.mdp import feet_clearance as feet_clearance
 
 
 def track_linear_velocity(
@@ -51,38 +53,6 @@ def track_angular_velocity(
     )
 
     return torch.exp(-(z_error + 0.05 * xy_error) / std**2)
-
-def feet_clearance(
-    env: ManagerBasedRlEnv,
-    target_height: float,
-    command_name: str | None = None,
-    command_threshold: float = 0.1,
-    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-) -> torch.Tensor:
-    """Penalize foot height error weighted by horizontal foot velocity."""
-    asset: Entity = env.scene[asset_cfg.name]
-
-    foot_z = asset.data.site_pos_w[:, asset_cfg.site_ids, 2]
-    foot_vel_xy = asset.data.site_lin_vel_w[
-        :, asset_cfg.site_ids, :2
-    ]
-
-    vel_norm = torch.norm(foot_vel_xy, dim=-1)
-    delta = torch.abs(foot_z - target_height)
-
-    cost = torch.sum(delta * vel_norm, dim=1)
-
-    if command_name is not None:
-        command = env.command_manager.get_command(command_name)
-
-        linear_norm = torch.norm(command[:, :2], dim=1)
-        angular_norm = torch.abs(command[:, 2])
-        total_command = linear_norm + angular_norm
-
-        active = (total_command > command_threshold).float()
-        cost = cost * active
-
-    return cost
 
 def feet_gait(
     env: ManagerBasedRlEnv,

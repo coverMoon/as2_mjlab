@@ -13,6 +13,8 @@ dependencies = [
 
 [project.scripts]
 as2-mjlab = "as2_mjlab:main"
+train = "as2_mjlab.scripts.train:main"
+export = "as2_mjlab.scripts.export_onnx:main"
 
 [build-system]
 requires = ["uv_build>=0.12.5,<0.13.0"]
