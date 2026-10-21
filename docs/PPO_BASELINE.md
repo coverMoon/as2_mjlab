@@ -39,7 +39,7 @@ Critic 按顺序追加：
 | Actor 对应项 | 45 | 无噪声本体观测 |
 | base_lin_vel | 3 | 真实机身线速度，scale 2 |
 | height_scan | 187 | yaw 对齐的 1.6 × 1.0 m 网格，分辨率 0.1 m |
-| foot_height | 4 | 足端 site 的世界 Z，不用 TerrainProjectionSensor |
+| foot_height | 4 | 足端 site 的世界 Z；奖励用的局部净空不加入观测 |
 | foot_contact | 4 | 是否触地 |
 | foot_contact_time | 4 | 当前连续触地时长（秒），区别于 Unitree 原有的空中时长 |
 | foot_contact_forces | 12 | 四脚三轴力，沿用 MjLab 的 `sign(f) * log1p(abs(f))` |
@@ -49,7 +49,7 @@ Critic 按顺序追加：
 
 ## PPO 奖励
 
-基础十项参考 [ETH legged_gym 的基础奖励实现](https://github.com/leggedrobotics/legged_gym/blob/master/legged_gym/envs/base/legged_robot.py) 和 [默认配置](https://github.com/leggedrobotics/legged_gym/blob/master/legged_gym/envs/base/legged_robot_config.py)。后续按需求加入独立重写的 pose，共十一项：
+基础十项参考 [ETH legged_gym 的基础奖励实现](https://github.com/leggedrobotics/legged_gym/blob/master/legged_gym/envs/base/legged_robot.py) 和 [默认配置](https://github.com/leggedrobotics/legged_gym/blob/master/legged_gym/envs/base/legged_robot_config.py)。后续加入独立重写的 pose 和局部地形 Foot Clearance，共十二项：
 
 | 名称 | 权重 | 原始值 |
 |---|---:|---|
@@ -59,15 +59,20 @@ Critic 按顺序追加：
 | ang_vel_xy | -0.05 | `sum(w_body_xy^2)` |
 | orientation | -0.2 | `sum(projected_gravity_xy^2)` |
 | pose | 1.0 | `exp(-mean(((q-q_default)/std)^2))`，容差按速度指令分档 |
+| foot_clearance | -0.25 | `sum(abs(local_height-0.10) * norm(foot_world_velocity_xy))` |
 | torques | -1e-5 | MjLab `joint_torques_l2` |
 | joint_acc | -2.5e-7 | MjLab `joint_acc_l2` |
 | action_rate | -0.01 | 原始策略动作差的平方和 |
 | joint_pos_limits | -10.0 | 超出软关节限位的距离之和 |
 | termination | -200.0 | 失败且没有同时超时 |
 
-速度奖励自行实现，因为当前 MjLab Velocity 的跟踪函数还包含 Z 或 Roll/Pitch 误差，不符合这个基线的独立跟踪形式。其余正则化优先使用通用函数。没有 gait、clearance、air-time、slip、soft-landing、stand-still 或 angular-momentum 奖励。
+速度奖励自行实现，因为当前 MjLab Velocity 的跟踪函数还包含 Z 或 Roll/Pitch 误差，不符合这个基线的独立跟踪形式。其余正则化优先使用通用函数。没有 gait、air-time、slip、soft-landing、stand-still 或 angular-momentum 奖励。
 
 `pose` 在 PPO 内独立实现，不导入 velocity 的奖励或配置。参数采用 velocity 当前最终配置：权重 1.0，按 `norm(command_xy) + abs(command_yaw)` 在 0.1 / 1.5 处分为站立、行走和跑动；Hip/Thigh/Calf 容差依次为站立 `[0.05,0.1,0.15]` rad，行走和跑动均为 `[0.15,0.35,0.5]` rad。Flat / Rough 共享该项，观测和动作接口不变。
+
+`foot_clearance` 在 PPO 内独立返回正 cost，Flat / Rough 均使用目标净空 0.10 m、权重 -0.25。仅在 `norm(command_xy) + abs(command_yaw) > 0.1` 时启用，世界系足端 XY 速度为零时该脚不贡献代价。函数内不取负号、不乘 dt，也不判断步态或摆动相。
+
+奖励使用共享 `as2_mjlab.sensors.TerrainProjectionSensor`：每脚中心加周围四点（半径 4 cm），取最小净空，即以局部最高地形为参考。传感器从静态地形上方竖直查询，净空按实际足端 Z 减命中地面 Z 计算，允许台阶高于脚时得到负值。该传感器不加入 Actor 或 Critic；Critic 原有的足端高度与 187 点扫描保持原样。Unitree 的旧传感器导入路径保留，传感器实现和任务参数不变。
 
 具体差异与时序：
 

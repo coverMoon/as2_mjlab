@@ -19,6 +19,7 @@ from mjlab.sensor import (
     GridPatternCfg,
     ObjRef,
     RayCastSensorCfg,
+    RingPatternCfg,
 )
 from mjlab.sim import MujocoCfg, SimulationCfg
 from mjlab.tasks.velocity.mdp import (
@@ -35,6 +36,7 @@ from mjlab.utils.noise import UniformNoiseCfg
 from mjlab.viewer import ViewerConfig
 
 from as2_mjlab.robots.as2_constants import get_as2_robot_cfg
+from as2_mjlab.sensors import TerrainProjectionSensorCfg
 
 from .mdp import observations as ppo_observations
 from .mdp import rewards as ppo_rewards
@@ -52,7 +54,7 @@ def make_ppo_env_cfg() -> ManagerBasedRlEnvCfg:
     """构造共享 PPO 配置：45 维 Actor、259 维 Critic，默认使用平地。"""
 
     # ------------------------------------------------------------------
-    # 传感器：地形扫描只供 Critic 使用，不参与 Actor 输入或抬脚奖励。
+    # 传感器：terrain_scan 供 Critic 使用；foot_height_scan 仅供离地高度奖励。
     # ------------------------------------------------------------------
     terrain_scan = RayCastSensorCfg(
         name="terrain_scan",
@@ -62,6 +64,21 @@ def make_ppo_env_cfg() -> ManagerBasedRlEnvCfg:
         max_distance=5.0,
         exclude_parent_body=True,
         include_geom_groups=(0,),  # 仅扫描地形，忽略机器人碰撞体。
+        debug_vis=False,
+    )
+    foot_height_scan = TerrainProjectionSensorCfg(
+        name="foot_height_scan",
+        frame=tuple(ObjRef(type="site", name=leg, entity="robot") for leg in LEGS),
+        ray_alignment="yaw",
+        pattern=RingPatternCfg.single_ring(
+            radius=0.04,
+            num_samples=4,
+            include_center=True,
+        ),
+        reduction="min",  # 五个采样点中最小净空，对应局部最高地面。
+        query_margin=0.1,
+        exclude_parent_body=True,
+        include_geom_groups=(0,),
         debug_vis=False,
     )
     feet_contact = ContactSensorCfg(
@@ -248,6 +265,21 @@ def make_ppo_env_cfg() -> ManagerBasedRlEnvCfg:
                 },
             },
         ),
+        "foot_clearance": RewardTermCfg(
+            func=ppo_rewards.feet_clearance,
+            weight=-0.25,  # 函数返回正 cost，负号和 dt 只在 RewardManager 施加。
+            params={
+                "target_height": 0.10,
+                "height_sensor_name": "foot_height_scan",
+                "command_name": "twist",
+                "command_threshold": 0.1,
+                "asset_cfg": SceneEntityCfg(
+                    "robot",
+                    site_names=LEGS,
+                    preserve_order=True,  # 与传感器 frame 的四脚顺序一致。
+                ),
+            },
+        ),
         "torques": RewardTermCfg(
             func=mdp.joint_torques_l2,
             weight=-1e-5,
@@ -373,19 +405,19 @@ def make_ppo_env_cfg() -> ManagerBasedRlEnvCfg:
     velocity_stages = [
         {
             "step": 0,
-            "lin_vel_x": (-0.5, 1.0),
+            "lin_vel_x": (-1.0, 1.0),
             "lin_vel_y": (-0.3, 0.3),
             "ang_vel_z": (-0.5, 0.5),
         },
         {
             "step": 500 * num_steps_per_env,
-            "lin_vel_x": (-0.7, 1.3),
+            "lin_vel_x": (-1.5, 1.5),
             "lin_vel_y": (-0.5, 0.5),
             "ang_vel_z": (-1.3, 1.3),
         },
         {
             "step": 1000 * num_steps_per_env,
-            "lin_vel_x": (-1.0, 1.6),
+            "lin_vel_x": (-1.75, 1.75),
             "lin_vel_y": (-0.8, 0.8),
             "ang_vel_z": (-2.5, 2.5),
         },
@@ -395,6 +427,12 @@ def make_ppo_env_cfg() -> ManagerBasedRlEnvCfg:
             "lin_vel_y": (-1.0, 1.0),
             "ang_vel_z": (-3.14, 3.14),
         },
+        {
+            "step": 3000 * num_steps_per_env,
+            "lin_vel_x": (-3.0, 3.0),
+            "lin_vel_y": (-1.0, 1.0),
+            "ang_vel_z": (-3.14, 3.14),
+        }
     ]
     curriculum = {}
     if ENABLE_COMMAND_CURRICULUM:
@@ -413,7 +451,7 @@ def make_ppo_env_cfg() -> ManagerBasedRlEnvCfg:
         scene=SceneCfg(
             entities={"robot": get_as2_robot_cfg()},
             terrain=TerrainEntityCfg(terrain_type="plane"),
-            sensors=(terrain_scan, feet_contact, nonfoot_contact),
+            sensors=(terrain_scan, foot_height_scan, feet_contact, nonfoot_contact),
             num_envs=1,
             extent=2.0,
         ),

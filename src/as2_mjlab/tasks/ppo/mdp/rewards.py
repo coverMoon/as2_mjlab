@@ -43,6 +43,25 @@ def termination(env: ManagerBasedRlEnv) -> torch.Tensor:
     return (env.termination_manager.terminated & ~env.termination_manager.time_outs).float()
 
 
+def feet_clearance(
+    env: ManagerBasedRlEnv,
+    target_height: float,
+    height_sensor_name: str,
+    command_name: str,
+    command_threshold: float = 0.1,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """局部地形净空误差乘世界系足端水平速度，返回未加权的正 cost。"""
+    height = env.scene[height_sensor_name].data.heights
+    velocity_xy = env.scene[asset_cfg.name].data.site_lin_vel_w[:, asset_cfg.site_ids, :2]
+    speed_xy = torch.linalg.vector_norm(velocity_xy, dim=-1)
+    cost = ((height - target_height).abs() * speed_xy).sum(dim=1)
+
+    command = env.command_manager.get_command(command_name)
+    command_speed = torch.linalg.vector_norm(command[:, :2], dim=1) + command[:, 2].abs()
+    return cost * (command_speed > command_threshold)
+
+
 class pose:
     """根据指令放宽姿态容差，奖励关节接近默认位置；PPO 独立实现。"""
 
