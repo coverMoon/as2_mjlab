@@ -15,6 +15,9 @@ wheels/
 .coverage.*
 htmlcov/
 
+# Local-only tests
+/tests/
+
 # Virtual environments
 .venv/
 venv/
