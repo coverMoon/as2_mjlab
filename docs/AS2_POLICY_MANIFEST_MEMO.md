@@ -1,7 +1,8 @@
-# AS2 Policy Manifest — 设计备忘（暂不实施）
+# AS2 Policy Manifest — 设计备忘
 
-**状态：** Proposed / Deferred  
-**用途：** 为 `as2_mjlab` 导出的策略与 `as2_control` 的部署端建立可验证的输入、输出和时序契约。**这是一份未来实现备忘，当前不改训练代码、不实现生成器或解析器。**
+**状态：** 导出端 v1 已实施；C++ 部署端与逐项跨语言一致性测试待实施。
+
+**用途：** 为 `as2_mjlab` 导出的策略与 `as2_control` 的部署端建立可验证的输入、输出和时序契约。当前格式、命令和边界见 [Policy Manifest v1](POLICY_MANIFEST_V1.md)。本文保留总体设计方向；按当前要求，不加入模型哈希。
 
 ## 1. 为什么需要它
 
@@ -22,7 +23,7 @@ policies/as2_flat_v1/
 | 分组 | 建议字段 | 目的 |
 |---|---|---|
 | 身份与版本 | `schema_version`、`robot`、训练 Git Commit、MjLab/RSL-RL 版本 | 明确来源和契约版本 |
-| 模型 | ONNX 路径/哈希、输入输出名称、dtype、shape | 启动时验证张量与模型文件一致 |
+| 模型 | ONNX 路径、输入输出名称、dtype、shape | 启动时验证张量与模型文件一致 |
 | 观测 | 有序 Term 列表、各项 `name`、`dim`、参数、坐标系、单位、数据来源 | 明确拼接和计算语义 |
 | 预处理 | 每项 clip、scale、历史顺序、是否包含归一化于 ONNX | 避免错位与重复归一化 |
 | 时间状态 | 策略 `dt`、phase 公式和重置规则、上一动作的定义与更新时序 | 保证时序一致 |
@@ -32,6 +33,17 @@ policies/as2_flat_v1/
 **不建议放入 Manifest：** DDS 域/网卡、硬件急停、通信超时、实机校准、机械安全上限等部署安全配置。这些应属于 `as2_control` 的设备与安全配置，不能让训练模型覆盖。
 
 ## 3. AS2 Flat 基线（以当前仓库代码为参照）
+
+任务统一使用 `as2-<terrain>-<algorithm>`：
+
+| 任务 | Actor / Critic | 接口特点 |
+|---|---|---|
+| `as2-flat-unitree` / `as2-rough-unitree` | 47 / 261 | 保留现有 gyro 观测、phase 和 Unitree 运动先验 |
+| `as2-flat-ppo` / `as2-rough-ppo` | 45 / 259 | 根部机身角速度，无 phase，无 Actor 地形输入 |
+
+`as2-flat` / `as2-rough` 不再注册。旧 checkpoint 使用对应 `unitree` 任务加载，不能作为新 PPO 的 45 维 checkpoint 直接加载。
+
+以下 47 维顺序属于 Unitree baseline。
 
 Actor 观测顺序：
 
@@ -52,7 +64,11 @@ base_ang_vel(3) → projected_gravity(3) → command(3)
 - `q_target = q_default + 0.25 * raw_action`；**关节顺序必须依据训练时的实际 action/joint 映射输出，不应从足端 Site 顺序推断**。
 - 训练 Actor 启用 `obs_normalization=True`。目前所检查的 RSL-RL MLP ONNX 导出实现内含归一化模块；后续应以**实际生成的 ONNX 图及数值对比**确认，部署端不得重复归一化。
 
-Rough 将追加 `height_scan(187)`：需要额外记录 RayCast 网格、顺序、坐标系、命中/未命中值、缩放，以及所依赖的外部感知来源。不能只用 `dim: 187` 代替计算语义。
+当前 Flat 与 Rough 的 Actor 均为上述 47 维，`height_scan(187)` 仅输入 Critic。未来如果给 Actor 追加扫描，需要记录 RayCast 网格、顺序、坐标系、命中/未命中值、缩放及外部感知来源。不能只用 `dim: 187` 代替计算语义。
+
+新 PPO baseline 顺序为 `base_ang_vel(3) → projected_gravity(3) → command(3) → joint_pos(12) → joint_vel(12) → actions(12)`，共 45 维，动作仍为 12 维、50 Hz。角速度来自 `root_link_ang_vel_b`；角速度 scale 为 0.25，命令 scale 为 `[2,2,0.25]`，关节速度 scale 为 0.05。它的 Critic 追加真实线速度 3、扫描 187、足端世界高度 4、接触状态 4、当前连续触地时长 4、接触力 12，共 259 维。具体配置见 [PPO Baseline](PPO_BASELINE.md)。
+
+按本轮后续确认，保留上一轮已实现的 Manifest 功能并兼容 PPO。PPO 使用通用 MjLab Runner，其 checkpoint 不额外存档训练契约，也不自动导出 ONNX；独立 `export` 可生成 45 维模型及 Manifest，并如实标注契约来自导出环境。
 
 ## 4. 未来文件格式示意（不是已实现 Schema）
 
@@ -61,7 +77,6 @@ schema_version: 1
 robot: as2
 model:
   file: policy.onnx
-  sha256: <to-be-generated>
   input: {name: <from-onnx>, shape: [1, 47], dtype: float32}
   output: {name: <from-onnx>, shape: [1, 12], dtype: float32}
   normalization: embedded_in_onnx  # 需根据实际导出文件验证
@@ -84,12 +99,12 @@ action:
 
 说明：示例里的 `source` 和 `kind` 是拟议的稳定语义标识，并非当前 MjLab 原生 Metadata 的字段；占位符必须在正式导出时替换。未来还需明确逐项 clip/scale、reset 与 history 的机器可读规则。
 
-## 5. 后续实施顺序（延后执行）
+## 5. 实施顺序
 
-1. 在 `as2_mjlab` 导出阶段读取 **实际生效**的 Actor 观测顺序、Action 顺序、预处理以及 ONNX 张量/哈希，生成 Manifest。
+1. 在 `as2_mjlab` 导出阶段读取 **实际生效**的 Actor 观测顺序、Action 顺序、预处理以及 ONNX 张量，生成 Manifest（v1 已实施）。
 2. `as2_control` 启动时加载 Manifest，并与 ONNX 输入输出、RobotModel、可用 ObservationTerms 逐项验证；不匹配则拒绝启动 RL。
 3. 用相同的确定性仿真状态/命令/上一动作，对比 MjLab 与 C++ 的**每项观测、最终输入张量和 ONNX 推理输出**，而不是只对比维度。
-4. 先覆盖 Flat 47-D，再扩展 Rough 234-D、历史窗口和视觉等多输入模型。
+4. 先覆盖当前 Flat/Rough 47-D，再扩展未来带高度扫描的 Actor、历史窗口和视觉等多输入模型。
 
 ## 6. 仍待验证的契约细节
 
@@ -99,4 +114,4 @@ action:
 - ONNX 中是否已包含预处理/归一化，是否包含动作后处理；以实际导出图为准。
 - 站立、传感器失效、策略停用与重新启动时，状态型观测项的明确重置规则。
 
-**决定：** 本阶段只保留该备忘，不实现 Manifest 自动生成、完整 Schema、解析器或插件体系。
+**当前范围：** 已实现训练契约存档、ONNX 旁的 Manifest 自动生成和 Python 校验；C++ 解析、SDK2 映射与插件体系不在本仓库第一版范围内。
