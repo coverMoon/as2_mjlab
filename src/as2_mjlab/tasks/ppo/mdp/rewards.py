@@ -62,6 +62,44 @@ def feet_clearance(
     return cost * (command_speed > command_threshold)
 
 
+def thigh_contact(
+    env: ManagerBasedRlEnv,
+    sensor_name: str,
+    force_threshold: float = 10.0,
+) -> torch.Tensor:
+    """统计最近传感器历史中受力超过阈值的大腿，每条腿最多计一次。"""
+    force_history = env.scene[sensor_name].data.force_history
+    assert force_history is not None
+    force_magnitude = torch.linalg.vector_norm(force_history, dim=-1)
+    return (force_magnitude > force_threshold).any(dim=-1).float().sum(dim=1)
+
+
+def soft_landing(
+    env: ManagerBasedRlEnv,
+    sensor_name: str,
+    command_name: str | None = None,
+    command_threshold: float = 0.05,
+) -> torch.Tensor:
+    """仅累加刚触地脚的三维合力，返回未加权的正 cost。"""
+    sensor = env.scene[sensor_name]
+    forces = sensor.data.force
+    assert forces is not None
+    force_magnitude = torch.linalg.vector_norm(forces, dim=-1)
+    first_contact = sensor.compute_first_contact(dt=env.step_dt)
+    landing_force = force_magnitude * first_contact
+    cost = landing_force.sum(dim=1)
+
+    # 与 Unitree 相同：日志统计所有新触地脚，在运动指令门控之前计算。
+    landing_count = first_contact.sum().clamp(min=1)
+    env.extras["log"]["Metrics/landing_force_mean"] = landing_force.sum() / landing_count
+    if command_name is not None:
+        command = env.command_manager.get_command(command_name)
+        if command is not None:
+            speed = torch.linalg.vector_norm(command[:, :2], dim=1) + command[:, 2].abs()
+            cost = cost * (speed > command_threshold)
+    return cost
+
+
 class pose:
     """根据指令放宽姿态容差，奖励关节接近默认位置；PPO 独立实现。"""
 

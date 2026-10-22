@@ -40,6 +40,7 @@ from as2_mjlab.sensors import TerrainProjectionSensorCfg
 
 from .mdp import observations as ppo_observations
 from .mdp import rewards as ppo_rewards
+from .mdp.commands import TerrainVelocityCommandCfg, TerrainVelocityGroupsCfg
 from .rl_cfg import ppo_runner_cfg
 
 
@@ -193,7 +194,7 @@ def make_ppo_env_cfg() -> ManagerBasedRlEnvCfg:
         ),
     }
     commands = {
-        "twist": UniformVelocityCommandCfg(
+        "twist": TerrainVelocityCommandCfg(
             entity_name="robot",
             resampling_time_range=(3.0, 8.0),
             rel_standing_envs=0.05,
@@ -219,12 +220,12 @@ def make_ppo_env_cfg() -> ManagerBasedRlEnvCfg:
     rewards = {
         "tracking_lin_vel": RewardTermCfg(
             func=ppo_rewards.tracking_lin_vel,
-            weight=1.0,
+            weight=2.0,
             params={"tracking_sigma": 0.25, "command_name": "twist"},
         ),
         "tracking_ang_vel": RewardTermCfg(
             func=ppo_rewards.tracking_ang_vel,
-            weight=0.5,
+            weight=1.5,
             params={"tracking_sigma": 0.25, "command_name": "twist"},
         ),
         "lin_vel_z": RewardTermCfg(
@@ -242,7 +243,7 @@ def make_ppo_env_cfg() -> ManagerBasedRlEnvCfg:
         # 与 velocity 当前最终配置一致；参数独立定义，方便 PPO 单独调节。
         "pose": RewardTermCfg(
             func=ppo_rewards.pose,
-            weight=1.0,
+            weight=0.5,
             params={
                 "command_name": "twist",
                 "asset_cfg": SceneEntityCfg("robot", joint_names=(".*",)),
@@ -267,7 +268,7 @@ def make_ppo_env_cfg() -> ManagerBasedRlEnvCfg:
         ),
         "foot_clearance": RewardTermCfg(
             func=ppo_rewards.feet_clearance,
-            weight=-0.25,  # 函数返回正 cost，负号和 dt 只在 RewardManager 施加。
+            weight=-1.0,  # 函数返回正 cost，负号和 dt 只在 RewardManager 施加。
             params={
                 "target_height": 0.10,
                 "height_sensor_name": "foot_height_scan",
@@ -278,6 +279,15 @@ def make_ppo_env_cfg() -> ManagerBasedRlEnvCfg:
                     site_names=LEGS,
                     preserve_order=True,  # 与传感器 frame 的四脚顺序一致。
                 ),
+            },
+        ),
+        "soft_landing": RewardTermCfg(
+            func=ppo_rewards.soft_landing,
+            weight=-1e-3,
+            params={
+                "sensor_name": "feet_ground_contact",
+                "command_name": "twist",
+                "command_threshold": 0.1,
             },
         ),
         "torques": RewardTermCfg(
@@ -432,8 +442,19 @@ def make_ppo_env_cfg() -> ManagerBasedRlEnvCfg:
             "lin_vel_x": (-3.0, 3.0),
             "lin_vel_y": (-1.0, 1.0),
             "ang_vel_z": (-3.14, 3.14),
-        }
+        },
     ]
+    # Rough 专用：按 |vx| 分组（m/s），与当前 velocity_stages 范围取交集。
+    # plane 两组混合采样，其余地形只用低速；vy / yaw 不参与分组。
+    # 高速区间尚未开放时回退到低速组。Flat / Play 使用原版采样器。
+    terrain_velocity_groups = TerrainVelocityGroupsCfg(
+        enabled=True,
+        low_speed_range=(0.0, 1.0),
+        high_speed_range=(1.0, 3.0),
+        high_speed_probability=0.5,
+    )
+    commands["twist"].terrain_velocity_groups = terrain_velocity_groups
+
     curriculum = {}
     if ENABLE_COMMAND_CURRICULUM:
         curriculum["command_vel"] = CurriculumTermCfg(
@@ -493,6 +514,7 @@ def _configure_play(cfg: ManagerBasedRlEnvCfg) -> None:
     cfg.observations["actor"].enable_corruption = False
     cfg.events.pop("push_robot")
     cfg.curriculum = {}
+    cfg.commands["twist"].terrain_velocity_groups.enabled = False
 
 
 def ppo_flat_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
@@ -537,10 +559,34 @@ def ppo_rough_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
     )
     cfg.sim.contact_sensor_maxmatch = 500
 
-    # 允许小腿磕到台阶边缘：仅排除终止监测，碰撞物理仍然生效。
+    # 大腿接触改为奖励惩罚，小腿接触继续允许；机身等其余部位仍触发终止。
+    # 仅调整监测，所有碰撞物理仍然生效。
     for sensor in cfg.scene.sensors:
         if sensor.name == "nonfoot_ground_touch":
-            sensor.primary.exclude = (*FOOT_GEOMS, r".*_calf\d*_collision\d*$")
+            sensor.primary.exclude = (
+                *FOOT_GEOMS,
+                r".*_calf\d*_collision\d*$",
+                r".*_thigh\d*_collision\d*$",
+            )
+
+    cfg.scene.sensors = (*cfg.scene.sensors, ContactSensorCfg(
+        name="thigh_ground_contact",
+        primary=ContactMatch(
+            mode="body",
+            pattern=tuple(f"{leg}_thigh" for leg in LEGS),
+            entity="robot",
+        ),
+        secondary=ContactMatch(mode="body", pattern="terrain"),
+        fields=("force",),
+        reduce="maxforce",  # 每条大腿取最强接触，不重复统计多个碰撞体。
+        num_slots=1,
+        history_length=4,
+    ))
+    cfg.rewards["thigh_contact"] = RewardTermCfg(
+        func=ppo_rewards.thigh_contact,
+        weight=-1.0,
+        params={"sensor_name": "thigh_ground_contact", "force_threshold": 10.0},
+    )
 
     cfg.curriculum["terrain_levels"] = CurriculumTermCfg(
         func=terrain_levels_vel,
