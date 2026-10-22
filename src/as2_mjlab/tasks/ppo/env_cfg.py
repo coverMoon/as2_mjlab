@@ -515,6 +515,10 @@ def _configure_play(cfg: ManagerBasedRlEnvCfg) -> None:
     cfg.events.pop("push_robot")
     cfg.curriculum = {}
     cfg.commands["twist"].terrain_velocity_groups.enabled = False
+    for sensor in cfg.scene.sensors:
+        if sensor.name in ("terrain_scan", "foot_height_scan"):
+            sensor.debug_vis = True
+            sensor.viz.show_rays = False
 
 
 def ppo_flat_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
