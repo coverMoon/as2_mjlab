@@ -1,4 +1,4 @@
-"""SLR network/loss building blocks only; importing this package registers no tasks."""
+"""SLR building blocks; importing this package registers no tasks."""
 
 from .losses import SLR_TRIPLET_LOSS_COEF, slr_triplet_loss
 from .models import (
@@ -9,6 +9,7 @@ from .models import (
     SLRNetworks,
     SLRTransitionModel,
 )
+from .storage import SLRRolloutStorage, sample_negative_indices
 
 __all__ = [
     "SLR_TRIPLET_LOSS_COEF",
@@ -17,6 +18,8 @@ __all__ = [
     "SLREncoder",
     "SLRModelCfg",
     "SLRNetworks",
+    "SLRRolloutStorage",
     "SLRTransitionModel",
     "slr_triplet_loss",
+    "sample_negative_indices",
 ]
