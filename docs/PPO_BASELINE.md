@@ -22,7 +22,7 @@ uv run play as2-rough-unitree --checkpoint-file <old-unitree-checkpoint.pt> --vi
 uv run export as2-flat-ppo --checkpoint-file <ppo-checkpoint.pt>
 ```
 
-四个任务都支持现有 train / play / export 入口。新 PPO 使用通用 `MjlabOnPolicyRunner`，不随保存自动导出 ONNX；独立 `export` 同目录生成同名 ONNX 和 Manifest。PPO 当前不额外存档训练时契约，Manifest 会标注来自导出环境。按后续用户确认保留 Manifest 功能，本轮只增加 PPO 角速度语义支持；C++ 部署端不在本轮范围内。
+四个任务都支持现有 train / play / export 入口。PPO 使用通用 `MjlabOnPolicyRunner`，不随保存自动导出 ONNX；独立 `export` 同目录生成同名 ONNX 和 Manifest。PPO 当前不额外存档训练时契约，Manifest 会标注来自导出环境。
 
 ## PPO 输入与控制
 
@@ -45,35 +45,47 @@ Critic 按顺序追加：
 | foot_contact_forces | 12 | 四脚三轴力，沿用 MjLab 的 `sign(f) * log1p(abs(f))` |
 | 总计 | **259** | |
 
-共用 AS2 MJCF、初始姿态和 Hip/Thigh/Calf 执行器；`q_target = q_default + 0.25 * action`。仿真步长 0.005 s、decimation 4、策略周期 0.02 s，训练 episode 20 s。Actor/Critic 均为 `[512,256,128]`、ELU、启用观测归一化；PPO 超参数与现有 Unitree 配置相同。
+共用 AS2 MJCF、初始姿态和 Hip/Thigh/Calf 执行器；`q_target = q_default + 0.25 * action`。仿真步长 0.005 s、decimation 4、策略周期 0.02 s，训练 episode 20 s。配置默认环境数为 1，训练命令可通过 `--env.scene.num-envs` 覆盖。
+
+Actor/Critic 均为 `[512,256,128]`、ELU，分别启用观测归一化。Actor 使用 GaussianDistribution，初始标准差 1.0，`std_type="scalar"`。优化与采样参数在 `tasks/ppo/rl_cfg.py` 中独立定义：
+
+| 参数 | 当前值 |
+|---|---|
+| rollout / 最大 iteration / 保存间隔 | 24 步 / 10001 / 100 |
+| learning epochs / mini-batches | 5 / 4 |
+| learning rate / schedule / desired KL | 1e-3 / adaptive / 0.01 |
+| clip param / clipped value loss / value loss coef | 0.2 / 开启 / 1.0 |
+| entropy coef / max grad norm | 0.005 / 1.0 |
+| gamma / GAE lambda | 0.99 / 0.95 |
 
 ## PPO 奖励
 
-基础十项参考 [ETH legged_gym 的基础奖励实现](https://github.com/leggedrobotics/legged_gym/blob/master/legged_gym/envs/base/legged_robot.py) 和 [默认配置](https://github.com/leggedrobotics/legged_gym/blob/master/legged_gym/envs/base/legged_robot_config.py)。后续加入独立重写的 pose、局部地形 Foot Clearance 和 Soft Landing，共十三项：
+基础十项参考 [ETH legged_gym 的基础奖励实现](https://github.com/leggedrobotics/legged_gym/blob/master/legged_gym/envs/base/legged_robot.py) 和 [默认配置](https://github.com/leggedrobotics/legged_gym/blob/master/legged_gym/envs/base/legged_robot_config.py)。加入独立重写的 pose、局部地形 Foot Clearance 和 Soft Landing 后，Flat 共十三项；Rough 额外加入大腿碰撞惩罚，共十四项。下表未标注的项由 Flat / Rough 共用：
 
 | 名称 | 权重 | 原始值 |
 |---|---:|---|
-| tracking_lin_vel | 1.0 | `exp(-sum((cmd_xy-v_body_xy)^2)/0.25)` |
-| tracking_ang_vel | 0.5 | `exp(-(cmd_yaw-w_body_z)^2/0.25)` |
+| tracking_lin_vel | 2.0 | `exp(-sum((cmd_xy-v_body_xy)^2)/0.25)` |
+| tracking_ang_vel | 1.5 | `exp(-(cmd_yaw-w_body_z)^2/0.25)` |
 | lin_vel_z | -2.0 | `v_body_z^2` |
 | ang_vel_xy | -0.05 | `sum(w_body_xy^2)` |
 | orientation | -0.2 | `sum(projected_gravity_xy^2)` |
-| pose | 1.0 | `exp(-mean(((q-q_default)/std)^2))`，容差按速度指令分档 |
-| foot_clearance | -0.25 | `sum(abs(local_height-0.10) * norm(foot_world_velocity_xy))` |
+| pose | 0.5 | `exp(-mean(((q-q_default)/std)^2))`，容差按速度指令分档 |
+| foot_clearance | -1.0 | `sum(abs(local_height-0.10) * norm(foot_world_velocity_xy))`，仅运动指令超过阈值时启用 |
 | soft_landing | -1e-3 | `sum(norm(foot_contact_force_xyz) * first_contact)`，仅运动指令超过阈值时启用 |
 | torques | -1e-5 | MjLab `joint_torques_l2` |
 | joint_acc | -2.5e-7 | MjLab `joint_acc_l2` |
 | action_rate | -0.01 | 原始策略动作差的平方和 |
 | joint_pos_limits | -10.0 | 超出软关节限位的距离之和 |
 | termination | -200.0 | 失败且没有同时超时 |
+| thigh_contact（仅 Rough） | -1.0 | 最近 4 帧中接触力超过 10 N 的大腿数量（0–4） |
 
 速度奖励自行实现，因为当前 MjLab Velocity 的跟踪函数还包含 Z 或 Roll/Pitch 误差，不符合这个基线的独立跟踪形式。其余正则化优先使用通用函数。没有 gait、air-time、slip、stand-still 或 angular-momentum 奖励。
 
 `soft_landing` 在 PPO 奖励模块独立实现，Flat / Rough 配置显式设置权重 -1e-3、指令阈值 0.1，与当前 Unitree AS2 配置一致。仅在 `norm(command_xy) + abs(command_yaw) > 0.1` 时累加刚触地脚的三维接触力大小；首次触地由接触传感器按一个策略步长判定。函数返回正 cost，由 RewardManager 统一乘权重和 dt。`Metrics/landing_force_mean` 记录指令门控前所有新触地脚的平均接触力。
 
-`pose` 在 PPO 内独立实现，不导入 velocity 的奖励或配置。参数采用 velocity 当前最终配置：权重 1.0，按 `norm(command_xy) + abs(command_yaw)` 在 0.1 / 1.5 处分为站立、行走和跑动；Hip/Thigh/Calf 容差依次为站立 `[0.05,0.1,0.15]` rad，行走和跑动均为 `[0.15,0.35,0.5]` rad。Flat / Rough 共享该项，观测和动作接口不变。
+`pose` 在 PPO 内独立实现，不导入 velocity 的奖励或配置，当前权重为 0.5。按 `norm(command_xy) + abs(command_yaw)` 分档：小于 0.1 为站立，`[0.1,1.5)` 为行走，大于等于 1.5 为跑动；Hip/Thigh/Calf 容差依次为站立 `[0.05,0.1,0.15]` rad，行走和跑动均为 `[0.15,0.35,0.5]` rad。Flat / Rough 共享该项。
 
-`foot_clearance` 在 PPO 内独立返回正 cost，Flat / Rough 均使用目标净空 0.10 m、权重 -0.25。仅在 `norm(command_xy) + abs(command_yaw) > 0.1` 时启用，世界系足端 XY 速度为零时该脚不贡献代价。函数内不取负号、不乘 dt，也不判断步态或摆动相。
+`foot_clearance` 在 PPO 内独立返回正 cost，Flat / Rough 均使用目标净空 0.10 m、权重 -1.0。仅在 `norm(command_xy) + abs(command_yaw) > 0.1` 时启用，世界系足端 XY 速度为零时该脚不贡献代价。函数内不取负号、不乘 dt，也不判断步态或摆动相。
 
 奖励使用共享 `as2_mjlab.sensors.TerrainProjectionSensor`：每脚中心加周围四点（半径 4 cm），取最小净空，即以局部最高地形为参考。传感器从静态地形上方竖直查询，净空按实际足端 Z 减命中地面 Z 计算，允许台阶高于脚时得到负值。该传感器不加入 Actor 或 Critic；Critic 原有的足端高度与 187 点扫描保持原样。Unitree 的旧传感器导入路径保留，传感器实现和任务参数不变。
 
@@ -81,20 +93,32 @@ Critic 按顺序追加：
 
 - RewardManager 统一执行 `raw_value * weight * step_dt`，权重只填一次，函数内不再乘 dt。失败终止在 0.02 s 下贡献 `-200 * 0.02 = -4`；纯超时以及失败/超时同时发生均为零，匹配 legged_gym 的 `reset & ~timeout` 语义。
 - AS2 当前为一关节一个单位传动比执行器，因此 MjLab 的 actuator-force 平方和对应关节 PD 力矩平方和。
-- `joint_acc_l2` 使用 MuJoCo 当前物理子步的关节加速度；legged_gym 使用相邻策略步关节速度差除以策略 dt。第一版明确保留 MjLab 通用实现，不增加有状态奖励缓存。
+- `joint_acc_l2` 使用 MuJoCo 当前物理子步的关节加速度；legged_gym 使用相邻策略步关节速度差除以策略 dt。当前保留 MjLab 通用实现。
 - 直接使用带符号的奖励总和；未引入 legged_gym 默认的总奖励正值裁剪。软关节限位保留共享机器人定义的 0.9 系数。
 
 ## Flat / Rough 与课程
 
-Flat 为 Plane，不启用地形课程。Rough 从 MjLab 通用地形集合独立复制并显式覆盖为当前 AS2 地形：10 层、8 × 8 m 地块，楼梯单级高度 0–0.30 m，初始难度上限 5；类型比例依次为平地 0.1、上楼梯 0.3、下楼梯 0.2、正/反斜坡各 0.1、随机粗糙 0.1、波浪 0.1。
+Flat 为 Plane，不启用地形课程。Rough 从 MjLab 通用地形集合独立复制并覆盖参数：10 层、20 列、8 × 8 m 地块，楼梯单级高度 0–0.30 m、踏面宽度 0.30 m，初始难度上限 5；类型的 `proportion` 相对权重依次为平地 0.1、上楼梯 0.3、下楼梯 0.2、正/反斜坡各 0.1、随机粗糙 0.1、波浪 0.1。
 
 Rough 按距出生点位移大于半个地块升级，低于期望行走距离一半降级；初次 reset 不升级。Play 保留相同的整齐地形生成方式，关闭难度更新，并在 root reset 前重新选择地形。
 
 两个 PPO 任务共享足端摩擦、encoder bias、base COM 偏移、reset 和随机推力配置。Rough 的非足端终止监测排除小腿和大腿碰撞体，机身等其余部位仍按接触力超过 10 N 触发终止；Flat 保留原有大腿、小腿接触终止规则。碰撞物理均保留。
 
-Rough 额外增加 `thigh_contact` 奖励，权重初值 -1.0，共十四项奖励。独立传感器按四条大腿 body 匹配，每条大腿每帧取最强接触，检查最近 4 帧三维接触力大小是否超过 10 N，原始 cost 为满足条件的大腿数量（0–4）。不依赖运动指令，持续接触会持续扣分；RewardManager 统一乘权重和策略步长，在 0.02 s 下每条碰撞大腿每步贡献 -0.02。Actor / Critic 观测保持不变。
+Rough 的 `thigh_contact` 使用独立传感器按四条大腿 body 匹配，每条大腿每帧取最强接触，检查最近 4 帧三维接触力大小是否超过 10 N，原始 cost 为满足条件的大腿数量（0–4）。不依赖运动指令，持续接触会持续扣分；RewardManager 统一乘权重和策略步长，在 0.02 s 下每条碰撞大腿每步贡献 -0.02。Actor / Critic 观测保持不变。
 
-指令课程独立定义在 PPO 工厂，通过 `env_cfg.py` 顶部的 `ENABLE_COMMAND_CURRICULUM = True` 默认开启，Flat / Rough 训练共用。阶段为 `0/500/1000/1500 × num_steps_per_env`，继承现有 AS2 的阶段范围作为初始值；在 reset 时根据全局策略步计数切换范围。Play 关闭课程、观测噪声和随机推力。先验证基础 PPO 在 Flat 的学习趋势，再训练 Rough；本轮未按训练性能调整任何奖励权重。
+指令课程独立定义在 PPO 工厂，通过 `env_cfg.py` 顶部的 `ENABLE_COMMAND_CURRICULUM = True` 默认开启，Flat / Rough 训练共用。在 reset 时根据全局策略步计数 `common_step_counter` 分段切换范围；此计数每次环境推进加一，不乘并行环境数量。阶段边界使用 `ppo_runner_cfg().num_steps_per_env=24` 换算：
+
+| 阶段（默认 rollout 下约对应 iteration） | 全局策略步 | vx（m/s） | vy（m/s） | yaw rate（rad/s） |
+|---|---:|---|---|---|
+| 0 | 0 | [-1.0, 1.0] | [-0.3, 0.3] | [-0.5, 0.5] |
+| 500 | 12000 | [-1.5, 1.5] | [-0.5, 0.5] | [-1.3, 1.3] |
+| 1000 | 24000 | [-1.75, 1.75] | [-0.8, 0.8] | [-2.5, 2.5] |
+| 1500 | 36000 | [-2.0, 2.0] | [-1.0, 1.0] | [-3.14, 3.14] |
+| 3000 | 72000 | [-3.0, 3.0] | [-1.0, 1.0] | [-3.14, 3.14] |
+
+命令每 3–8 s 重采样，站立环境比例 0.05。全部非站立环境使用 heading 控制，目标 heading 范围为 `[-pi,pi]`，控制刚度 0.5；yaw rate 根据 heading 误差生成并受当前阶段范围限制。关闭指令课程时，静态范围为 `vx=[-1,2]`、`vy=[-1,1]`、`yaw rate=[-1,1]`。
+
+Play 关闭课程、Actor 观测噪声和随机推力，将 episode 时限设为 1e9 s，保留 startup 物理随机化和碰撞终止。Flat Play 指令范围为 `vx=[-0.5,1]`、`vy=[-0.5,0.5]`、`yaw rate=[-0.5,0.5]`；Rough Play 使用上述静态范围。
 
 Rough 的指令分组配置 `terrain_velocity_groups` 放在 `velocity_stages` 下方：`enabled` 控制开关，`low_speed_range=(0.0, 1.0)` 和 `high_speed_range=(1.0, 3.0)` 按 **前后速度绝对值 `|vx|`（m/s）** 划分，`high_speed_probability=0.5` 指平地环境选择高速组的概率。生成地形中的 `BoxFlatTerrainCfg` 地块可采两组，其他类型只采低速组；楼梯平台和难度为零的楼梯仍按楼梯处理。判断使用当前分配的地形类型，不是机器人脚下瞬时坡度。
 
