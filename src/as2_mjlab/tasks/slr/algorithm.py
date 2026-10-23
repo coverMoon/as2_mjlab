@@ -153,6 +153,7 @@ class SLRPPO(PPO):
         self.transition = storage.Transition()
         self.triplet_loss_coef = triplet_loss_coef
         self.triplet_margin = triplet_margin
+        self._slr_metrics: dict[str, float] = {}
 
     @property
     def networks(self) -> SLRNetworks:
@@ -200,6 +201,10 @@ class SLRPPO(PPO):
 
     def compute_slr_loss(self, batch: SLRRolloutStorage.Batch) -> torch.Tensor:
         valid, negative = sample_negative_indices(batch.valid_transition_mask)
+        self._slr_metrics = {
+            "valid_triplet_fraction": valid.numel() / batch.history.shape[0],
+            "latent_norm": 0.0, "positive_distance": 0.0, "negative_distance": 0.0,
+        }
         if valid.numel() == 0:
             return batch.history.new_zeros(())
         history = self.actor.normalize_history(batch.history[valid])
@@ -210,10 +215,20 @@ class SLRPPO(PPO):
         # compact valid-only latent batch. No invalid next histories are encoded.
         permutation = torch.searchsorted(valid, negative)
         z_pred = self.networks.transition(z, batch.actions[valid])
+        with torch.no_grad():
+            self._slr_metrics.update(
+                latent_norm=z.norm(dim=-1).mean().item(),
+                positive_distance=(z_next - z_pred).square().sum(-1).mean().item(),
+                negative_distance=(z_next - z_next[permutation]).square().sum(-1).mean().item(),
+            )
         return slr_triplet_loss(z_next, z_pred, z_next[permutation], self.triplet_margin)
 
     def update(self) -> dict[str, float]:
-        totals = dict.fromkeys(("surrogate", "value", "entropy", "slr", "total", "kl"), 0.0)
+        totals = dict.fromkeys((
+            "surrogate", "value", "entropy", "slr", "slr_weighted", "total", "kl",
+            "valid_triplet_fraction", "latent_norm", "positive_distance", "negative_distance",
+            "encoder_grad_norm",
+        ), 0.0)
         for batch in self.storage.mini_batch_generator(self.num_mini_batches, self.num_learning_epochs):
             terms = self.ppo_loss_terms(batch)
             if self.desired_kl is not None and self.schedule == "adaptive":
@@ -229,6 +244,12 @@ class SLRPPO(PPO):
                     - self.entropy_coef * terms["entropy"] + self.triplet_loss_coef * slr)
             self.optimizer.zero_grad(set_to_none=True)
             loss.backward()
+            encoder_grad_squares = [
+                p.grad.detach().square().sum()
+                for p in self.networks.encoder.parameters() if p.grad is not None
+            ]
+            if encoder_grad_squares:
+                totals["encoder_grad_norm"] += torch.stack(encoder_grad_squares).sum().sqrt().item()
             # One global clip includes Encoder, both heads, Transition and std
             # exactly once, following official SLR's joint optimizer semantics.
             nn.utils.clip_grad_norm_(self._raw_actor.parameters(), self.max_grad_norm)
@@ -236,7 +257,10 @@ class SLRPPO(PPO):
             for name in ("surrogate", "value", "entropy", "kl"):
                 totals[name] += terms[name].item()
             totals["slr"] += slr.item()
+            totals["slr_weighted"] += self.triplet_loss_coef * slr.item()
             totals["total"] += loss.item()
+            for name, value in self._slr_metrics.items():
+                totals[name] += value
         count = self.num_mini_batches * self.num_learning_epochs
         self.storage.clear()
         return {name: value / count for name, value in totals.items()}
