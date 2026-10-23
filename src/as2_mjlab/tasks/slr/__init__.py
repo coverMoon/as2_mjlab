@@ -10,6 +10,7 @@ from .models import (
     SLRTransitionModel,
 )
 from .storage import SLRRolloutStorage, sample_negative_indices
+from .algorithm import SLRPPO
 
 __all__ = [
     "SLR_TRIPLET_LOSS_COEF",
@@ -18,6 +19,7 @@ __all__ = [
     "SLREncoder",
     "SLRModelCfg",
     "SLRNetworks",
+    "SLRPPO",
     "SLRRolloutStorage",
     "SLRTransitionModel",
     "slr_triplet_loss",
