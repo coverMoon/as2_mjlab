@@ -81,6 +81,12 @@ def make_ppo_env_cfg() -> ManagerBasedRlEnvCfg:
         exclude_parent_body=True,
         include_geom_groups=(0,),
         debug_vis=False,
+        viz=TerrainProjectionSensorCfg.VizCfg(
+            show_rays=True,
+            hit_color=(1.0, 0.0, 1.0, 0.8),
+            hit_sphere_color=(1.0, 0.0, 1.0, 1.0),
+            hit_sphere_radius=0.15,
+        ),
     )
     feet_contact = ContactSensorCfg(
         name="feet_ground_contact",
@@ -518,7 +524,7 @@ def _configure_play(cfg: ManagerBasedRlEnvCfg) -> None:
     for sensor in cfg.scene.sensors:
         if sensor.name in ("terrain_scan", "foot_height_scan"):
             sensor.debug_vis = True
-            sensor.viz.show_rays = False
+            sensor.viz.show_rays = sensor.name == "foot_height_scan"
 
 
 def ppo_flat_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:

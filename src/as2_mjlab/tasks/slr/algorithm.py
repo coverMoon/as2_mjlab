@@ -67,6 +67,11 @@ class SLRPolicy(_FeedForwardModel):
     def normalize_history(self, history: torch.Tensor) -> torch.Tensor:
         return self.obs_normalizer(history)
 
+    def as_onnx(self, verbose: bool = False) -> nn.Module:
+        from .exporter import OnnxSLRPolicy
+
+        return OnnxSLRPolicy(self, verbose)
+
     def forward(self, obs: TensorDict, stochastic_output: bool = False) -> torch.Tensor:
         history = self.normalize_history(obs["history"])
         mean = self.networks.act(history[:, -1, :], history)
