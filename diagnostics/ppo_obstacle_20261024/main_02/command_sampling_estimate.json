@@ -1,0 +1,19 @@
+{
+  "definition": "vx>=0.5, |vy|<=0.1, |executed yaw rate|<=0.1 m/s or rad/s",
+  "assumptions": [
+    "late curriculum",
+    "low vx group uniform [-1,1] on non-flat",
+    "vy uniform [-1,1]",
+    "heading targets uniform [-pi,pi] independent of current heading",
+    "heading stiffness .5",
+    "5% standing",
+    "uniform independent resamples; not an observed training frequency"
+  ],
+  "fraction_among_nonflat_command_resamples": 0.0015119719593730057,
+  "fraction_all_resamples_normal_pyramid_30pct": 0.0004535915878119017,
+  "fraction_all_resamples_inverted_pyramid_20pct": 0.0003023943918746012,
+  "normal_pyramid_spawn": "central top platform, x/y random offsets +/-0.5 inside 3m platform: initial traversal is descending",
+  "inverted_pyramid_spawn": "central bottom platform: initial traversal is ascending",
+  "terrain_curriculum": "radial distance >4m promotes; distance <command speed*20*.5 demotes; no explicit successful ascent signal",
+  "training_command_function_source_missing_from_archive": true
+}

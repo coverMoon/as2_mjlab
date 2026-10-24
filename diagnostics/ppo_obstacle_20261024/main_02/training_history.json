@@ -1,0 +1,36 @@
+[
+  {
+    "run": "2026-10-22_16-09-58_as2-rough-ppo",
+    "settings": {
+      "resume": "true",
+      "load_run": "2026-10-22_14-25-59_as2-rough-ppo",
+      "load_checkpoint": "model_.*.pt",
+      "max_iterations": "4001"
+    },
+    "last_available_checkpoint": "/home/windnotebook/PROJECT/Dog/Train/as2_mjlab/logs/rsl_rl/as2_ppo/2026-10-22_16-09-58_as2-rough-ppo/model_10000.pt"
+  },
+  {
+    "run": "2026-10-22_14-25-59_as2-rough-ppo",
+    "settings": {
+      "resume": "true",
+      "load_run": "2026-10-22_13-31-03_as2-flat-ppo",
+      "load_checkpoint": "model_.*.pt",
+      "max_iterations": "2001"
+    },
+    "last_available_checkpoint": "/home/windnotebook/PROJECT/Dog/Train/as2_mjlab/logs/rsl_rl/as2_ppo/2026-10-22_14-25-59_as2-rough-ppo/model_6000.pt"
+  },
+  {
+    "run": "2026-10-22_13-31-03_as2-flat-ppo",
+    "settings": {
+      "resume": "true",
+      "load_run": "2026-10-21_22-35-45_as2-flat-ppo",
+      "load_checkpoint": "model_3000.pt",
+      "max_iterations": "1001"
+    },
+    "last_available_checkpoint": "/home/windnotebook/PROJECT/Dog/Train/as2_mjlab/logs/rsl_rl/as2_ppo/2026-10-22_13-31-03_as2-flat-ppo/model_4000.pt"
+  },
+  {
+    "missing_earlier_run": "/home/windnotebook/PROJECT/Dog/Train/as2_mjlab/logs/rsl_rl/as2_ppo/2026-10-21_22-35-45_as2-flat-ppo",
+    "limitation": "Earlier config and source cannot be audited locally"
+  }
+]

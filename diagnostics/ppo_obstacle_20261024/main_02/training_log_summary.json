@@ -1,0 +1,188 @@
+{
+  "Episode_Reward/action_rate": {
+    "last_iteration": 10000,
+    "last_value": -0.15620340406894684,
+    "last_100_iterations_mean": -0.15975823201755485,
+    "semantics": "Episode_Reward = per-episode term sum / configured 20s, averaged over reset envs; not necessarily true episode-time average"
+  },
+  "Episode_Reward/joint_pos_limits": {
+    "last_iteration": 10000,
+    "last_value": -0.010261946357786655,
+    "last_100_iterations_mean": -0.011054231669975094,
+    "semantics": "Episode_Reward = per-episode term sum / configured 20s, averaged over reset envs; not necessarily true episode-time average"
+  },
+  "Episode_Reward/termination": {
+    "last_iteration": 10000,
+    "last_value": -0.007246376946568489,
+    "last_100_iterations_mean": -0.009531381042065596,
+    "semantics": "Episode_Reward = per-episode term sum / configured 20s, averaged over reset envs; not necessarily true episode-time average"
+  },
+  "Episode_Reward/soft_landing": {
+    "last_iteration": 10000,
+    "last_value": -0.05927298590540886,
+    "last_100_iterations_mean": -0.061901870045331445,
+    "semantics": "Episode_Reward = per-episode term sum / configured 20s, averaged over reset envs; not necessarily true episode-time average"
+  },
+  "Episode_Reward/ang_vel_xy": {
+    "last_iteration": 10000,
+    "last_value": -0.06942467391490936,
+    "last_100_iterations_mean": -0.07305150338918856,
+    "semantics": "Episode_Reward = per-episode term sum / configured 20s, averaged over reset envs; not necessarily true episode-time average"
+  },
+  "Curriculum/terrain_levels/hf_pyramid_slope_inv": {
+    "last_iteration": 10000,
+    "last_value": 4.987911224365234,
+    "last_100_iterations_mean": 4.95775833696422,
+    "semantics": "upstream scalar"
+  },
+  "Curriculum/terrain_levels/max": {
+    "last_iteration": 10000,
+    "last_value": 9.0,
+    "last_100_iterations_mean": 9.0,
+    "semantics": "upstream scalar"
+  },
+  "Episode_Reward/tracking_lin_vel": {
+    "last_iteration": 10000,
+    "last_value": 1.414831280708313,
+    "last_100_iterations_mean": 1.4103856700481754,
+    "semantics": "Episode_Reward = per-episode term sum / configured 20s, averaged over reset envs; not necessarily true episode-time average"
+  },
+  "Episode_Reward/thigh_contact": {
+    "last_iteration": 10000,
+    "last_value": -0.02259289287030697,
+    "last_100_iterations_mean": -0.018343245993266897,
+    "semantics": "Episode_Reward = per-episode term sum / configured 20s, averaged over reset envs; not necessarily true episode-time average"
+  },
+  "Curriculum/terrain_levels/pyramid_stairs": {
+    "last_iteration": 10000,
+    "last_value": 5.421884536743164,
+    "last_100_iterations_mean": 5.4920554255494975,
+    "semantics": "upstream scalar"
+  },
+  "Episode_Reward/tracking_ang_vel": {
+    "last_iteration": 10000,
+    "last_value": 1.2330021858215332,
+    "last_100_iterations_mean": 1.2354470231745502,
+    "semantics": "Episode_Reward = per-episode term sum / configured 20s, averaged over reset envs; not necessarily true episode-time average"
+  },
+  "Curriculum/terrain_levels/wave_terrain": {
+    "last_iteration": 10000,
+    "last_value": 5.58409309387207,
+    "last_100_iterations_mean": 5.718900652215032,
+    "semantics": "upstream scalar"
+  },
+  "Curriculum/command_vel/lin_vel_x_min": {
+    "last_iteration": 10000,
+    "last_value": -3.0,
+    "last_100_iterations_mean": -3.0,
+    "semantics": "upstream scalar"
+  },
+  "Episode_Reward/pose": {
+    "last_iteration": 10000,
+    "last_value": 0.34439757466316223,
+    "last_100_iterations_mean": 0.34219911871570174,
+    "semantics": "Episode_Reward = per-episode term sum / configured 20s, averaged over reset envs; not necessarily true episode-time average"
+  },
+  "Episode_Reward/joint_acc": {
+    "last_iteration": 10000,
+    "last_value": -0.06551210582256317,
+    "last_100_iterations_mean": -0.06930982100196403,
+    "semantics": "Episode_Reward = per-episode term sum / configured 20s, averaged over reset envs; not necessarily true episode-time average"
+  },
+  "Curriculum/command_vel/lin_vel_x_max": {
+    "last_iteration": 10000,
+    "last_value": 3.0,
+    "last_100_iterations_mean": 3.0,
+    "semantics": "upstream scalar"
+  },
+  "Curriculum/command_vel/lin_vel_y_max": {
+    "last_iteration": 10000,
+    "last_value": 1.0,
+    "last_100_iterations_mean": 1.0,
+    "semantics": "upstream scalar"
+  },
+  "Episode_Reward/torques": {
+    "last_iteration": 10000,
+    "last_value": -0.010332304984331131,
+    "last_100_iterations_mean": -0.010448278195344576,
+    "semantics": "Episode_Reward = per-episode term sum / configured 20s, averaged over reset envs; not necessarily true episode-time average"
+  },
+  "Episode_Reward/orientation": {
+    "last_iteration": 10000,
+    "last_value": -0.007177089340984821,
+    "last_100_iterations_mean": -0.0078930884212403,
+    "semantics": "Episode_Reward = per-episode term sum / configured 20s, averaged over reset envs; not necessarily true episode-time average"
+  },
+  "Curriculum/command_vel/ang_vel_z_max": {
+    "last_iteration": 10000,
+    "last_value": 3.140000104904175,
+    "last_100_iterations_mean": 3.140000104904175,
+    "semantics": "upstream scalar"
+  },
+  "Curriculum/command_vel/ang_vel_z_min": {
+    "last_iteration": 10000,
+    "last_value": -3.140000104904175,
+    "last_100_iterations_mean": -3.140000104904175,
+    "semantics": "upstream scalar"
+  },
+  "Curriculum/terrain_levels/hf_pyramid_slope": {
+    "last_iteration": 10000,
+    "last_value": 5.469141006469727,
+    "last_100_iterations_mean": 5.50666630150068,
+    "semantics": "upstream scalar"
+  },
+  "Curriculum/command_vel/lin_vel_y_min": {
+    "last_iteration": 10000,
+    "last_value": -1.0,
+    "last_100_iterations_mean": -1.0,
+    "semantics": "upstream scalar"
+  },
+  "Curriculum/terrain_levels/pyramid_stairs_inv": {
+    "last_iteration": 10000,
+    "last_value": 3.23942232131958,
+    "last_100_iterations_mean": 3.274667711541204,
+    "semantics": "upstream scalar"
+  },
+  "Curriculum/terrain_levels/mean": {
+    "last_iteration": 10000,
+    "last_value": 5.032470703125,
+    "last_100_iterations_mean": 5.0726128049416115,
+    "semantics": "upstream scalar"
+  },
+  "Curriculum/terrain_levels/flat": {
+    "last_iteration": 10000,
+    "last_value": 6.097136974334717,
+    "last_100_iterations_mean": 6.013194442975639,
+    "semantics": "upstream scalar"
+  },
+  "Episode_Reward/lin_vel_z": {
+    "last_iteration": 10000,
+    "last_value": -0.06202565133571625,
+    "last_100_iterations_mean": -0.06719486171951389,
+    "semantics": "Episode_Reward = per-episode term sum / configured 20s, averaged over reset envs; not necessarily true episode-time average"
+  },
+  "Episode_Reward/foot_clearance": {
+    "last_iteration": 10000,
+    "last_value": -0.1609961986541748,
+    "last_100_iterations_mean": -0.168736598574289,
+    "semantics": "Episode_Reward = per-episode term sum / configured 20s, averaged over reset envs; not necessarily true episode-time average"
+  },
+  "Curriculum/terrain_levels/random_rough": {
+    "last_iteration": 10000,
+    "last_value": 5.440403461456299,
+    "last_100_iterations_mean": 5.502790172501366,
+    "semantics": "upstream scalar"
+  },
+  "Train/mean_episode_length": {
+    "last_iteration": 10000,
+    "last_value": 986.8800048828125,
+    "last_100_iterations_mean": 974.8385160842745,
+    "semantics": "upstream scalar"
+  },
+  "Train/mean_episode_length/time": {
+    "last_iteration": 8914,
+    "last_value": 986.8800048828125,
+    "last_100_iterations_mean": 977.5534813922385,
+    "semantics": "upstream scalar"
+  }
+}

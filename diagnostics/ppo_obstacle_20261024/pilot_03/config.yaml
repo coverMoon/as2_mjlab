@@ -1,0 +1,195 @@
+git_head: c9808582945ae59db0b4156d9f82636d0a0c1070
+git_status_before: ' M src/as2_mjlab/tasks/slr/env_cfg.py
+
+  ?? diagnostics/
+
+  '
+training_git_commit: 954d2f843b585db4c9fccf64d6ec5d42e7d1f2be
+training_worktree_was_dirty: true
+checkpoint: /home/windnotebook/PROJECT/Dog/Train/as2_mjlab/logs/rsl_rl/as2_ppo/2026-10-22_16-09-58_as2-rough-ppo/model_10000.pt
+checkpoint_sha256: f134509cf2a40e3e8235bef17dfd9711e45d0f4cc1b1452de12c746f8c75138b
+checkpoint_iteration: 10000
+checkpoint_infos:
+  env_state:
+    common_step_counter: 240096
+versions:
+  mjlab: 1.6.0
+  rsl-rl-lib: 5.4.2
+  torch: 2.14.1
+  mujoco: 3.11.0
+  onnx: 1.23.2
+configuration_difference_count: 14
+archived_rewards_equal_current: true
+untracked_training_commands_source_archived: false
+seed: 20261024
+device: cuda:0
+episode_seconds: 3.0
+dt: 0.02
+conditions:
+- scenario: flat
+  terrain: flat
+  dimension: 0.0
+  start_x: -3.65
+  goal_x: 2.5
+  vx: 0.6
+  replicate: 0
+  difficulty: null
+  training_level_equivalent: null
+  env_id: 0
+  patch_center:
+  - 0.0
+  - -8.0
+  - 0.0
+  initial_pose_xyz:
+  - -3.657179355621338
+  - -8.026688575744629
+  - 0.4000000059604645
+  initial_yaw: 0.015503224373847768
+  step_height_m: null
+  step_width_m: null
+- scenario: flat
+  terrain: flat
+  dimension: 0.0
+  start_x: -3.65
+  goal_x: 2.5
+  vx: 1.0
+  replicate: 0
+  difficulty: null
+  training_level_equivalent: null
+  env_id: 1
+  patch_center:
+  - 0.0
+  - -8.0
+  - 0.0
+  initial_pose_xyz:
+  - -3.6758382320404053
+  - -8.033374786376953
+  - 0.4000000059604645
+  initial_yaw: -0.0005324810321337484
+  step_height_m: null
+  step_width_m: null
+- scenario: up_low
+  terrain: pyramid_stairs
+  dimension: 0.06
+  start_x: -3.65
+  goal_x: -1.1
+  vx: 0.6
+  replicate: 0
+  difficulty: 0.2
+  training_level_equivalent: 1.8000000000000003
+  env_id: 2
+  patch_center:
+  - 0.0
+  - 0.0
+  - 0.36000001430511475
+  initial_pose_xyz:
+  - -3.650730848312378
+  - -0.061937008053064346
+  - 0.4000000059604645
+  initial_yaw: -0.009777171948692018
+  step_height_m: 0.06
+  step_width_m: 0.3
+- scenario: up_low
+  terrain: pyramid_stairs
+  dimension: 0.06
+  start_x: -3.65
+  goal_x: -1.1
+  vx: 1.0
+  replicate: 0
+  difficulty: 0.2
+  training_level_equivalent: 1.8000000000000003
+  env_id: 3
+  patch_center:
+  - 0.0
+  - 0.0
+  - 0.36000001430511475
+  initial_pose_xyz:
+  - -3.6855108737945557
+  - -0.08371145278215408
+  - 0.4000000059604645
+  initial_yaw: 0.010928948858888801
+  step_height_m: 0.06
+  step_width_m: 0.3
+- scenario: up_mid
+  terrain: pyramid_stairs
+  dimension: 0.12
+  start_x: -3.65
+  goal_x: -1.1
+  vx: 0.6
+  replicate: 0
+  difficulty: 0.4
+  training_level_equivalent: 3.6000000000000005
+  env_id: 4
+  patch_center:
+  - 0.0
+  - 8.0
+  - 0.7200000286102295
+  initial_pose_xyz:
+  - -3.6647353172302246
+  - 7.88215970993042
+  - 0.4000000059604645
+  initial_yaw: 0.00876305384193668
+  step_height_m: 0.12
+  step_width_m: 0.3
+- scenario: up_mid
+  terrain: pyramid_stairs
+  dimension: 0.12
+  start_x: -3.65
+  goal_x: -1.1
+  vx: 1.0
+  replicate: 0
+  difficulty: 0.4
+  training_level_equivalent: 3.6000000000000005
+  env_id: 5
+  patch_center:
+  - 0.0
+  - 8.0
+  - 0.7200000286102295
+  initial_pose_xyz:
+  - -3.671710252761841
+  - 8.108375549316406
+  - 0.4000000059604645
+  initial_yaw: -0.02763581860007411
+  step_height_m: 0.12
+  step_width_m: 0.3
+repeats: 1
+reward_weights:
+  tracking_lin_vel: 2.0
+  tracking_ang_vel: 1.5
+  lin_vel_z: -2.0
+  ang_vel_xy: -0.05
+  orientation: -0.2
+  pose: 0.5
+  foot_clearance: -1.0
+  soft_landing: -0.001
+  torques: -1.0e-05
+  joint_acc: -2.5e-07
+  action_rate: -0.01
+  joint_pos_limits: -10.0
+  termination: -200.0
+  thigh_contact: -1.0
+reward_timing: captured inside compute before post-step forward, identical one-physics-substep
+  derived-state lag as production rewards
+raw_rewards: recovered from RewardManager._step_reward / weight; no repeated reward
+  calls; all weights nonzero
+scale_rewards_by_dt: true
+reward_total_max_abs_error: 2.2351741790771484e-08
+foot_clearance_formula_max_abs_error: 2.9802322387695312e-08
+domain_randomization_enabled:
+- foot_friction startup (0.3,1.6) shared
+- encoder_bias startup (-0.015,0.015)
+- base_com startup +/-0.05m
+domain_randomization_disabled:
+- observation noise
+- push_robot
+startup_dr_file: startup_dr.npz
+initial_state_variation: yaw +/-0.03 rad; lateral +/-0.12 m; longitudinal +/-0.04
+  m; joint position +/-0.015 rad
+auto_reset: false
+sampling: one first episode per environment; dead envs reset only to satisfy manual-reset
+  contract and are excluded thereafter
+policy_deterministic: true
+policy_state_unchanged: true
+wall_seconds: 1.0096602300181985
+success_rule: first reach goal_x within 1 m of patch centerline, before native failure;
+  recording stops at success to avoid subsequent terrain-border falls

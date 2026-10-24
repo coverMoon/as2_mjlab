@@ -1,0 +1,9 @@
+{
+  "rows": 73939,
+  "feet_rows": 295756,
+  "counterfactual_csv_max_abs_error": 2.0300000080908376e-07,
+  "per_leg_fc_csv_max_abs_error": 4.620000000621349e-09,
+  "production_ppo_sources_unchanged": true,
+  "checkpoint_hash_unchanged": true,
+  "figures": 20
+}

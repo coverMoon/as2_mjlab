@@ -1,0 +1,196 @@
+{
+  "startup_dr_bitwise_equal": {
+    "encoder_bias": true,
+    "geom_friction": true,
+    "body_ipos": true
+  },
+  "first_policy_action_max_abs_difference": 0.0,
+  "first_step_root_max_abs_difference": 0.0,
+  "first_second_root_max_abs_difference": 0.02587742544710636,
+  "different_success_outcomes": 1,
+  "primary_successes": 105,
+  "replay_successes": 106,
+  "interpretation": "Identical initial states/DR and deterministic actor; GPU contact simulation is not bitwise reproducible over long horizons. Compare aggregate outcomes, not exact long trajectories.",
+  "scene_comparison": [
+    {
+      "scenario": "flat",
+      "vx": 0.6,
+      "primary_success_rate": 1.0,
+      "replay_success_rate": 1.0,
+      "primary_stall_rate": 0.0,
+      "replay_stall_rate": 0.0,
+      "primary_failure_rate": 0.0,
+      "replay_failure_rate": 0.0
+    },
+    {
+      "scenario": "flat",
+      "vx": 1.0,
+      "primary_success_rate": 1.0,
+      "replay_success_rate": 1.0,
+      "primary_stall_rate": 0.0,
+      "replay_stall_rate": 0.0,
+      "primary_failure_rate": 0.0,
+      "replay_failure_rate": 0.0
+    },
+    {
+      "scenario": "up_low",
+      "vx": 0.6,
+      "primary_success_rate": 0.25,
+      "replay_success_rate": 0.25,
+      "primary_stall_rate": 0.75,
+      "replay_stall_rate": 0.75,
+      "primary_failure_rate": 0.0,
+      "replay_failure_rate": 0.0
+    },
+    {
+      "scenario": "up_low",
+      "vx": 1.0,
+      "primary_success_rate": 1.0,
+      "replay_success_rate": 1.0,
+      "primary_stall_rate": 0.125,
+      "replay_stall_rate": 0.125,
+      "primary_failure_rate": 0.0,
+      "replay_failure_rate": 0.0
+    },
+    {
+      "scenario": "down_low",
+      "vx": 0.6,
+      "primary_success_rate": 1.0,
+      "replay_success_rate": 1.0,
+      "primary_stall_rate": 0.0,
+      "replay_stall_rate": 0.0,
+      "primary_failure_rate": 0.0,
+      "replay_failure_rate": 0.0
+    },
+    {
+      "scenario": "down_low",
+      "vx": 1.0,
+      "primary_success_rate": 1.0,
+      "replay_success_rate": 1.0,
+      "primary_stall_rate": 0.0,
+      "replay_stall_rate": 0.0,
+      "primary_failure_rate": 0.0,
+      "replay_failure_rate": 0.0
+    },
+    {
+      "scenario": "up_mid",
+      "vx": 0.6,
+      "primary_success_rate": 0.0,
+      "replay_success_rate": 0.0,
+      "primary_stall_rate": 1.0,
+      "replay_stall_rate": 1.0,
+      "primary_failure_rate": 0.0,
+      "replay_failure_rate": 0.0
+    },
+    {
+      "scenario": "up_mid",
+      "vx": 1.0,
+      "primary_success_rate": 0.0,
+      "replay_success_rate": 0.0,
+      "primary_stall_rate": 1.0,
+      "replay_stall_rate": 1.0,
+      "primary_failure_rate": 0.0,
+      "replay_failure_rate": 0.0
+    },
+    {
+      "scenario": "down_mid",
+      "vx": 0.6,
+      "primary_success_rate": 1.0,
+      "replay_success_rate": 1.0,
+      "primary_stall_rate": 0.0,
+      "replay_stall_rate": 0.0,
+      "primary_failure_rate": 0.0,
+      "replay_failure_rate": 0.0
+    },
+    {
+      "scenario": "down_mid",
+      "vx": 1.0,
+      "primary_success_rate": 1.0,
+      "replay_success_rate": 1.0,
+      "primary_stall_rate": 0.0,
+      "replay_stall_rate": 0.0,
+      "primary_failure_rate": 0.0,
+      "replay_failure_rate": 0.0
+    },
+    {
+      "scenario": "up_high",
+      "vx": 0.6,
+      "primary_success_rate": 0.0,
+      "replay_success_rate": 0.0,
+      "primary_stall_rate": 1.0,
+      "replay_stall_rate": 1.0,
+      "primary_failure_rate": 0.0,
+      "replay_failure_rate": 0.0
+    },
+    {
+      "scenario": "up_high",
+      "vx": 1.0,
+      "primary_success_rate": 0.0,
+      "replay_success_rate": 0.0,
+      "primary_stall_rate": 1.0,
+      "replay_stall_rate": 1.0,
+      "primary_failure_rate": 0.0,
+      "replay_failure_rate": 0.0
+    },
+    {
+      "scenario": "down_high",
+      "vx": 0.6,
+      "primary_success_rate": 0.875,
+      "replay_success_rate": 1.0,
+      "primary_stall_rate": 0.125,
+      "replay_stall_rate": 0.0,
+      "primary_failure_rate": 0.125,
+      "replay_failure_rate": 0.0
+    },
+    {
+      "scenario": "down_high",
+      "vx": 1.0,
+      "primary_success_rate": 1.0,
+      "replay_success_rate": 1.0,
+      "primary_stall_rate": 0.0,
+      "replay_stall_rate": 0.0,
+      "primary_failure_rate": 0.0,
+      "replay_failure_rate": 0.0
+    },
+    {
+      "scenario": "slope",
+      "vx": 0.6,
+      "primary_success_rate": 1.0,
+      "replay_success_rate": 1.0,
+      "primary_stall_rate": 0.0,
+      "replay_stall_rate": 0.0,
+      "primary_failure_rate": 0.0,
+      "replay_failure_rate": 0.0
+    },
+    {
+      "scenario": "slope",
+      "vx": 1.0,
+      "primary_success_rate": 1.0,
+      "replay_success_rate": 1.0,
+      "primary_stall_rate": 0.0,
+      "replay_stall_rate": 0.0,
+      "primary_failure_rate": 0.0,
+      "replay_failure_rate": 0.0
+    },
+    {
+      "scenario": "rough",
+      "vx": 0.6,
+      "primary_success_rate": 1.0,
+      "replay_success_rate": 1.0,
+      "primary_stall_rate": 0.0,
+      "replay_stall_rate": 0.0,
+      "primary_failure_rate": 0.0,
+      "replay_failure_rate": 0.0
+    },
+    {
+      "scenario": "rough",
+      "vx": 1.0,
+      "primary_success_rate": 1.0,
+      "replay_success_rate": 1.0,
+      "primary_stall_rate": 0.0,
+      "replay_stall_rate": 0.0,
+      "primary_failure_rate": 0.0,
+      "replay_failure_rate": 0.0
+    }
+  ]
+}
